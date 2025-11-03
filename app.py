@@ -402,3 +402,7 @@ def index():
         selected_market_cap=min_market_cap,
         selected_min_strength=min_strength
     )
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
