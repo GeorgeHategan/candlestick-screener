@@ -2,6 +2,8 @@ flask
 gunicorn
 TA-Lib
 pandas
+numpy
+scipy
 alpha-vantage
 duckdb
 yfinance
