@@ -5,6 +5,30 @@
         td { padding: 5px; }
         .bullish { background: green; color: white; }
         .bearish { background: red; color: white; }
+        .strength { font-weight: bold; }
+        .strong { color: #006400; }
+        .good { color: #228B22; }
+        .moderate { color: #FFA500; }
+        .weak { color: #FF6347; }
+        .very_weak { color: #8B0000; }
+        .tradingview-link {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 12px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+            z-index: 10;
+            transition: all 0.3s;
+        }
+        .tradingview-link:hover {
+            background: rgba(0,120,255,0.9);
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
@@ -17,6 +41,33 @@
             {% endfor %}
         </select>
 
+        <select name="sector">
+            <option value="">-- All Sectors --</option>
+            {% for sector in available_sectors %}
+                <option value="{{ sector }}" {% if selected_sector == sector %}selected="selected"{% endif %}>{{ sector }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="min_market_cap">
+            <option value="">-- Min Market Cap --</option>
+            <option value="100M" {% if selected_market_cap == '100M' %}selected{% endif %}>$100M+</option>
+            <option value="500M" {% if selected_market_cap == '500M' %}selected{% endif %}>$500M+</option>
+            <option value="1B" {% if selected_market_cap == '1B' %}selected{% endif %}>$1B+</option>
+            <option value="5B" {% if selected_market_cap == '5B' %}selected{% endif %}>$5B+</option>
+            <option value="10B" {% if selected_market_cap == '10B' %}selected{% endif %}>$10B+</option>
+            <option value="50B" {% if selected_market_cap == '50B' %}selected{% endif %}>$50B+</option>
+            <option value="100B" {% if selected_market_cap == '100B' %}selected{% endif %}>$100B+</option>
+        </select>
+
+        <select name="min_strength">
+            <option value="">-- Min Strength --</option>
+            <option value="50" {% if selected_min_strength == '50' %}selected{% endif %}>50+ (Any)</option>
+            <option value="60" {% if selected_min_strength == '60' %}selected{% endif %}>60+ (Moderate)</option>
+            <option value="70" {% if selected_min_strength == '70' %}selected{% endif %}>70+ (Good)</option>
+            <option value="80" {% if selected_min_strength == '80' %}selected{% endif %}>80+ (Strong)</option>
+            <option value="90" {% if selected_min_strength == '90' %}selected{% endif %}>90+ (Very Strong)</option>
+        </select>
+
         <input type="submit" value="Scan" />
     </form>
 
@@ -25,12 +76,18 @@
             <th>symbol</th>
             <th>company</th>
             <th>signal</th>
+            <th>strength</th>
+            <th>quality</th>
         </tr>
         {% for stock in stocks %}
             {% if stocks[stock][pattern] %}
             <tr>
                 <td>
-                    {{ stock }}
+                    <a href="https://www.tradingview.com/chart/?symbol={{ stock }}" 
+                       target="_blank" 
+                       style="color: #0066cc; text-decoration: none; font-weight: bold; font-size: 14px;">
+                        {{ stock }}
+                    </a>
                 </td>
                 <td>
                     {{ stocks[stock]['company'] }}
@@ -38,9 +95,77 @@
                 <td class="{{ stocks[stock][pattern] }}">
                     {{ stocks[stock][pattern]}}
                 </td>
+                <td class="strength">
+                    {{ stocks[stock][pattern + '_strength'] }}
+                </td>
+                <td class="{{ stocks[stock][pattern + '_quality'] }}">
+                    {{ stocks[stock][pattern + '_quality'] }}
+                </td>
             <tr>
                 <td colspan="3">
                     <img src="https://finviz.com/chart.ashx?t={{ stock }}&ty=c&ta=1&p=d&s=l" />
+                </td>
+                <td colspan="2" style="vertical-align: top; padding-left: 20px;">
+                    <div style="font-size: 14px; line-height: 1.8;">
+                        <strong>Volume Analysis:</strong><br>
+                        Volume: {{ "{:,}".format(stocks[stock][pattern + '_volume']) }}<br>
+                        Avg (20d): {{ "{:,}".format(stocks[stock][pattern + '_avg_volume']) }}<br>
+                        <strong>Ratio: {{ stocks[stock][pattern + '_volume_ratio'] }}x</strong>
+                        {% if stocks[stock][pattern + '_volume_ratio'] >= 2.0 %}
+                            <span style="color: green; font-weight: bold;"> ✓ HIGH</span>
+                        {% elif stocks[stock][pattern + '_volume_ratio'] >= 1.5 %}
+                            <span style="color: orange; font-weight: bold;"> ↑ Above Avg</span>
+                        {% elif stocks[stock][pattern + '_volume_ratio'] < 0.8 %}
+                            <span style="color: red;"> ↓ Below Avg</span>
+                        {% endif %}
+                        
+                        {% if stocks[stock][pattern + '_earnings_date'] and stocks[stock][pattern + '_earnings_days'] and stocks[stock][pattern + '_earnings_days'] > 0 %}
+                        <br><br>
+                        <strong>Next Earnings:</strong><br>
+                        Date: {{ stocks[stock][pattern + '_earnings_date'] }}<br>
+                        <strong>{{ stocks[stock][pattern + '_earnings_days'] }} days away</strong>
+                        {% if stocks[stock][pattern + '_earnings_days'] <= 7 %}
+                            <span style="color: red; font-weight: bold;"> ⚠ SOON!</span>
+                        {% elif stocks[stock][pattern + '_earnings_days'] <= 14 %}
+                            <span style="color: orange; font-weight: bold;"> ⚡ Coming Up</span>
+                        {% endif %}
+                        {% endif %}
+                        
+                        <br><br>
+                        <strong>Sector:</strong><br>
+                        {% if stocks[stock]['sector'] %}
+                            <span style="font-size: 14px; color: #333;">{{ stocks[stock]['sector'] }}</span>
+                        {% else %}
+                            <span style="color: gray; font-size: 12px;">Not Available</span>
+                        {% endif %}
+                        
+                        <br><br>
+                        <strong>Market Cap:</strong><br>
+                        {% if stocks[stock]['market_cap'] %}
+                            <span style="font-size: 16px; font-weight: bold; color: #0066cc;">${{ stocks[stock]['market_cap'] }}</span>
+                        {% else %}
+                            <span style="color: gray;">Not Available</span>
+                        {% endif %}
+                        
+                        {% if stocks[stock][pattern + '_sentiment_label'] %}
+                        <br><br>
+                        <strong>News Sentiment:</strong><br>
+                        {% if stocks[stock][pattern + '_sentiment_label'] == 'Bullish' %}
+                            <span style="font-size: 15px; font-weight: bold; color: #00AA00;">📈 Bullish</span>
+                        {% elif stocks[stock][pattern + '_sentiment_label'] == 'Somewhat-Bullish' %}
+                            <span style="font-size: 15px; font-weight: bold; color: #66CC66;">↗ Somewhat Bullish</span>
+                        {% elif stocks[stock][pattern + '_sentiment_label'] == 'Bearish' %}
+                            <span style="font-size: 15px; font-weight: bold; color: #CC0000;">📉 Bearish</span>
+                        {% elif stocks[stock][pattern + '_sentiment_label'] == 'Somewhat-Bearish' %}
+                            <span style="font-size: 15px; font-weight: bold; color: #FF6666;">↘ Somewhat Bearish</span>
+                        {% else %}
+                            <span style="font-size: 15px; color: #888888;">➡ Neutral</span>
+                        {% endif %}
+                        <br>
+                        <span style="font-size: 12px; color: #666;">Score: {{ stocks[stock][pattern + '_sentiment_score'] }}</span><br>
+                        <span style="font-size: 11px; color: #999;">(Based on {{ stocks[stock][pattern + '_sentiment_articles'] }} recent articles)</span>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% endif %}

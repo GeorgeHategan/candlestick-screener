@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Local database
+*.duckdb
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Data files (if you don't want to commit them)
+datasets/daily/*.csv
+nohup.out

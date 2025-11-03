@@ -1,4 +1,9 @@
 flask
+gunicorn
 TA-Lib
 pandas
+alpha-vantage
+duckdb
 yfinance
+lxml
+requests
