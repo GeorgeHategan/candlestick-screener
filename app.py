@@ -190,8 +190,8 @@ def index():
                COALESCE(f.company_name, d.symbol) as company,
                f.market_cap,
                f.sector
-        FROM daily_cache d
-        LEFT JOIN fundamental_cache f ON d.symbol = f.symbol
+        FROM scanner_data.daily_cache d
+        LEFT JOIN scanner_data.fundamental_cache f ON d.symbol = f.symbol
         WHERE 1=1
     '''
     
@@ -279,7 +279,7 @@ def index():
                 query = '''
                     SELECT date, open, high, low, close, volume,
                            rsi_14, sma_20, sma_50, sma_200, atr_14, rvol
-                    FROM daily_cache
+                    FROM scanner_data.daily_cache
                     WHERE symbol = ?
                     ORDER BY date DESC
                     LIMIT 252
@@ -374,7 +374,7 @@ def index():
     # Get available sectors for dropdown
     sectors_query = '''
         SELECT DISTINCT sector 
-        FROM fundamental_cache 
+        FROM scanner_data.fundamental_cache 
         WHERE sector IS NOT NULL 
         ORDER BY sector
     '''
