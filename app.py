@@ -40,8 +40,8 @@ ALPHA_VANTAGE_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '75IGYUZ3C7AC2PB
 def ensure_scanner_results_table():
     """Ensure scanner_results table exists with correct schema."""
     try:
-        # Try to connect with write access
-        conn = duckdb.connect(DUCKDB_PATH, read_only=False)
+        # Use read-only connection for schema check to avoid conflicts
+        conn = duckdb.connect(DUCKDB_PATH, read_only=True)
         
         # Check if table exists with correct schema
         try:
@@ -55,34 +55,18 @@ def ensure_scanner_results_table():
                         'strength', 'quality', 'scan_date']
             if ('signal_type' in column_names or
                 'signal_strength' in column_names):
-                print("WARNING: Old schema detected. App will adapt.")
-                print("To fix: manually drop and recreate table.")
+                print("INFO: Using existing schema with signal_type/signal_strength columns")
             elif column_names != expected:
-                print(f"WARNING: Schema mismatch: {column_names}")
-                print("App will try to adapt to existing schema.")
+                print(f"INFO: Schema columns: {column_names}")
                 
         except Exception as e:
             if "does not exist" in str(e).lower():
-                # Create table with correct schema
-                try:
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS scanner_data.scanner_results (
-                            symbol VARCHAR,
-                            scanner_name VARCHAR,
-                            signal VARCHAR,
-                            strength DOUBLE,
-                            quality VARCHAR,
-                            scan_date DATE,
-                            PRIMARY KEY (symbol, scanner_name, scan_date)
-                        )
-                    """)
-                    print("Created scanner_results table")
-                except Exception as create_err:
-                    print(f"Cannot create table (read-only?): {create_err}")
+                print("WARNING: scanner_results table not found")
+                print("Run with write access to create it, or use existing table")
         
         conn.close()
     except Exception as e:
-        print(f"Schema check skipped (read-only): {e}")
+        print(f"Schema check info: {e}")
 
 
 # Ensure table exists on startup
