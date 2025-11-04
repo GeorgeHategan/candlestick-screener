@@ -198,70 +198,7 @@
                 </td>
             <tr>
                 <td colspan="3">
-                    <div style="position: relative; display: inline-block;">
-                        <img src="https://finviz.com/chart.ashx?t={{ stock }}&ty=c&ta=1&p=d&s=l" id="chart-{{ stock }}" />
-                        <canvas id="overlay-{{ stock }}" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
-                    </div>
-                    <script>
-                        (function() {
-                            const img = document.getElementById('chart-{{ stock }}');
-                            const canvas = document.getElementById('overlay-{{ stock }}');
-                            
-                            img.onload = function() {
-                                canvas.width = img.width;
-                                canvas.height = img.height;
-                                const ctx = canvas.getContext('2d');
-                                
-                                // Chart dimensions (FinViz standard chart is ~830x470, trading area starts ~50px from left, ~30px from top)
-                                const chartLeft = 50;
-                                const chartTop = 30;
-                                const chartRight = img.width - 20;
-                                const chartBottom = img.height - 100;
-                                const chartWidth = chartRight - chartLeft;
-                                
-                                // Calculate date position (FinViz shows ~180 days by default)
-                                const daysShown = 180;
-                                const today = new Date();
-                                
-                                // Draw BLUE lines for ALL scanner picks (thin)
-                                {% if stocks[stock].get(pattern + '_all_pick_dates') %}
-                                const allPickDates = {{ stocks[stock][pattern + '_all_pick_dates'] | tojson }};
-                                allPickDates.forEach(function(dateStr) {
-                                    const pickDate = new Date(dateStr);
-                                    const daysAgo = Math.floor((today - pickDate) / (1000 * 60 * 60 * 24));
-                                    
-                                    if (daysAgo >= 0 && daysAgo <= daysShown) {
-                                        const xPos = chartRight - (daysAgo / daysShown * chartWidth);
-                                        
-                                        // Draw BLUE vertical line (thin)
-                                        ctx.strokeStyle = 'rgba(0, 120, 255, 0.6)';
-                                        ctx.lineWidth = 1;
-                                        ctx.beginPath();
-                                        ctx.moveTo(xPos, chartTop);
-                                        ctx.lineTo(xPos, chartBottom);
-                                        ctx.stroke();
-                                    }
-                                });
-                                {% endif %}
-                                
-                                // Draw YELLOW line for THIS scanner's pick (on top, slightly thicker)
-                                const scanDate = new Date('{{ stocks[stock][pattern + "_scan_date"] }}');
-                                const daysAgo = Math.floor((today - scanDate) / (1000 * 60 * 60 * 24));
-                                
-                                if (daysAgo >= 0 && daysAgo <= daysShown) {
-                                    const xPos = chartRight - (daysAgo / daysShown * chartWidth);
-                                    
-                                    // Draw YELLOW vertical line for this scanner's pick
-                                    ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)';
-                                    ctx.lineWidth = 2;
-                                    ctx.beginPath();
-                                    ctx.moveTo(xPos, chartTop);
-                                    ctx.lineTo(xPos, chartBottom);
-                                    ctx.stroke();
-                                }
-                            };
-                        })();
-                    </script>
+                    <img src="https://finviz.com/chart.ashx?t={{ stock }}&ty=c&ta=1&p=d&s=l" />
                 </td>
                 <td colspan="2" style="vertical-align: top; padding-left: 20px;">
                     <div style="font-size: 14px; line-height: 1.8;">

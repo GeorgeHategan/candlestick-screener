@@ -3,12 +3,6 @@ import talib
 import pandas
 import duckdb
 import yfinance as yf
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from io import BytesIO
-import base64
 from flask import Flask, request, render_template
 from markupsafe import escape
 from patterns import candlestick_patterns
@@ -451,16 +445,6 @@ def index():
                                 stocks[symbol][f'{pattern}_picked_count'] = picked_by_scanners
                             if setup_stage:
                                 stocks[symbol][f'{pattern}_setup_stage'] = setup_stage
-                            
-                            # Get all scanner pick dates for this symbol (for blue vertical lines)
-                            all_picks_query = '''
-                                SELECT DISTINCT DATE(scan_date) as pick_date, scanner_name
-                                FROM scanner_data.scanner_results
-                                WHERE symbol = ? AND scan_date IS NOT NULL
-                                ORDER BY pick_date DESC
-                            '''
-                            all_picks = conn.execute(all_picks_query, [symbol]).fetchall()
-                            stocks[symbol][f'{pattern}_all_pick_dates'] = [str(row[0]) for row in all_picks]
                             
                             # Get earnings date
                             earnings_info = get_earnings_date(symbol)
