@@ -370,6 +370,10 @@ def index():
         # Read pre-calculated scanner results from database
         # Build query with optional date filter
         if selected_scan_date:
+            # Use date range instead of DATE() function to allow index usage
+            date_obj = datetime.strptime(selected_scan_date, '%Y-%m-%d')
+            next_day = (date_obj + timedelta(days=1)).strftime('%Y-%m-%d')
+            
             scanner_query = '''
                 SELECT symbol,
                        signal_type,
@@ -380,9 +384,11 @@ def index():
                        setup_stage,
                        scan_date
                 FROM scanner_data.scanner_results
-                WHERE scanner_name = ? AND DATE(scan_date) = ?
+                WHERE scanner_name = ? 
+                AND scan_date >= ? 
+                AND scan_date < ?
             '''
-            query_params = [pattern, selected_scan_date]
+            query_params = [pattern, selected_scan_date, next_day]
         else:
             scanner_query = '''
                 SELECT symbol,
