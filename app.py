@@ -272,6 +272,7 @@ def index():
     sector_filter = request.args.get('sector', '')
     min_strength = request.args.get('min_strength', '')
     selected_scan_date = request.args.get('scan_date', '')
+    confirmed_only = request.args.get('confirmed_only', '')
     stocks = {}
 
     # Connect to DuckDB and get list of symbols
@@ -548,6 +549,15 @@ def index():
             else:
                 stocks[symbol][pattern] = None
     
+    # Apply confirmed_only filter
+    if confirmed_only == 'yes' and pattern:
+        filtered_stocks = {}
+        for symbol, data in stocks.items():
+            if data.get(f'{pattern}_confirmations') and len(data[f'{pattern}_confirmations']) > 0:
+                filtered_stocks[symbol] = data
+        stocks = filtered_stocks
+        print(f'Filtered to {len(stocks)} stocks confirmed by other scanners')
+    
     # Get available sectors for dropdown
     sectors_query = '''
         SELECT DISTINCT sector 
@@ -652,7 +662,8 @@ def index():
         selected_scan_date=selected_scan_date,
         selected_sector=sector_filter,
         selected_market_cap=min_market_cap,
-        selected_min_strength=min_strength
+        selected_min_strength=min_strength,
+        confirmed_only=confirmed_only
     )
 
 

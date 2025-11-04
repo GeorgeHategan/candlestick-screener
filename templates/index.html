@@ -144,6 +144,13 @@
             <option value="80" {% if selected_min_strength == '80' %}selected{% endif %}>80+ (Strong)</option>
             <option value="90" {% if selected_min_strength == '90' %}selected{% endif %}>90+ (Very Strong)</option>
         </select>
+
+        <label style="margin-left: 20px; cursor: pointer;">
+            <input type="checkbox" name="confirmed_only" value="yes" 
+                   {% if confirmed_only == 'yes' %}checked{% endif %}
+                   onchange="showLoading(); this.form.submit()">
+            <span style="font-weight: bold; color: #0066cc;">✓ Confirmed by other scanners only</span>
+        </label>
     </form>
 
     {% if pattern %}
