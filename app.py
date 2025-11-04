@@ -288,7 +288,9 @@ def index():
                 LIMIT 1
             """).fetchone()
             pattern = default_scanner[0] if default_scanner else False
-        except:
+            print(f"INFO: Set default scanner to: {pattern}")
+        except Exception as e:
+            print(f"ERROR: Could not get default scanner: {e}")
             pattern = False
     else:
         pattern = pattern if pattern != '' else False
@@ -507,6 +509,7 @@ def index():
         if selected_scan_date:
             # Use the selected date
             date_to_use = selected_scan_date
+            print(f"INFO: Using selected date: {date_to_use}")
         else:
             # Get the latest scan date
             latest_date_result = conn.execute("""
@@ -514,6 +517,7 @@ def index():
                 FROM scanner_data.scanner_results
             """).fetchone()
             date_to_use = str(latest_date_result[0]) if latest_date_result and latest_date_result[0] else None
+            print(f"INFO: Using latest scan date: {date_to_use}")
         
         if date_to_use:
             scanner_counts_query = """
@@ -524,8 +528,10 @@ def index():
                 ORDER BY scanner_name
             """
             scanner_counts = conn.execute(scanner_counts_query, [date_to_use]).fetchall()
+            print(f"INFO: Found {len(scanner_counts)} scanners for date {date_to_use}")
         else:
             # Fallback if no date available
+            print("WARNING: No date available, getting all scanner counts")
             scanner_counts_query = """
                 SELECT scanner_name, COUNT(*) as count
                 FROM scanner_data.scanner_results
@@ -543,8 +549,11 @@ def index():
             all_patterns[scanner_name] = display_name
         
         available_scanners = list(all_patterns.keys())
+        print(f"INFO: Loaded {len(all_patterns)} scanner patterns")
     except Exception as e:
-        print(f"Could not load scanners from DB: {e}")
+        print(f"ERROR: Could not load scanners from DB: {e}")
+        import traceback
+        traceback.print_exc()
         all_patterns = {}
         available_scanners = []
     
