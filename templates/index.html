@@ -30,14 +30,43 @@
             transform: scale(1.05);
         }
     </style>
+    <script>
+        function togglePatternFilter() {
+            const filterValue = document.querySelector('input[name="pattern_filter"]:checked').value;
+            const patternSelect = document.getElementById('patternSelect');
+            const options = patternSelect.querySelectorAll('option');
+            
+            options.forEach(option => {
+                if (option.value === '') {
+                    // Always show the default option
+                    option.style.display = '';
+                } else if (filterValue === 'precalculated') {
+                    // Show only pre-calculated scanners
+                    option.style.display = option.getAttribute('data-is-scanner') === 'true' ? '' : 'none';
+                } else {
+                    // Show all patterns
+                    option.style.display = '';
+                }
+            });
+        }
+    </script>
 </head>
 <body>
     <h1>Technical Scanner</h1>
     <form>
-        <select name="pattern">
+        <div style="margin-bottom: 10px;">
+            <label style="margin-right: 15px;">
+                <input type="radio" name="pattern_filter" value="all" checked onchange="togglePatternFilter()"> Show All Patterns
+            </label>
+            <label>
+                <input type="radio" name="pattern_filter" value="precalculated" onchange="togglePatternFilter()"> Pre-calculated Scanners Only
+            </label>
+        </div>
+
+        <select name="pattern" id="patternSelect">
             <option value="">-- Select a Pattern --</option>
             {% for key in candlestick_patterns %}
-                <option value="{{ key }}" {% if pattern == key %}selected="selected"{% endif %}>{{ candlestick_patterns[key] }}</option>
+                <option value="{{ key }}" {% if pattern == key %}selected="selected"{% endif %} data-is-scanner="{% if key in available_scanners %}true{% else %}false{% endif %}">{{ candlestick_patterns[key] }}</option>
             {% endfor %}
         </select>
 

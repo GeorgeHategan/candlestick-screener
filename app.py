@@ -37,6 +37,54 @@ DUCKDB_PATH = os.environ.get('DUCKDB_PATH', '/Users/george/scannerPOC/breakoutSc
 ALPHA_VANTAGE_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '75IGYUZ3C7AC2PBM')
 
 
+def ensure_scanner_results_table():
+    """Ensure scanner_results table exists with correct schema."""
+    try:
+        conn = duckdb.connect(DUCKDB_PATH, read_only=False)
+        
+        # Check if table exists with correct schema
+        try:
+            schema = conn.execute(
+                "DESCRIBE scanner_data.scanner_results"
+            ).fetchall()
+            column_names = [col[0] for col in schema]
+            
+            # Check for wrong schema (old table)
+            expected = ['symbol', 'scanner_name', 'signal',
+                        'strength', 'quality', 'scan_date']
+            if ('signal_type' in column_names or
+                'signal_strength' in column_names or
+                    column_names != expected):
+                print("Fixing scanner_results table schema...")
+                conn.execute(
+                    "DROP TABLE IF EXISTS scanner_data.scanner_results"
+                )
+                raise Exception("Table dropped, will recreate")
+                
+        except Exception:
+            # Create table with correct schema
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS scanner_data.scanner_results (
+                    symbol VARCHAR,
+                    scanner_name VARCHAR,
+                    signal VARCHAR,
+                    strength DOUBLE,
+                    quality VARCHAR,
+                    scan_date DATE,
+                    PRIMARY KEY (symbol, scanner_name, scan_date)
+                )
+            """)
+            print("Created scanner_results table with correct schema")
+        
+        conn.close()
+    except Exception as e:
+        print(f"Schema check error: {e}")
+
+
+# Ensure table exists on startup
+ensure_scanner_results_table()
+
+
 def format_market_cap(market_cap):
     """Format market cap for display (e.g., 3.99T, 415.6B, 500.2M)."""
     if market_cap is None:
@@ -341,6 +389,14 @@ def index():
     '''
     available_sectors = [row[0] for row in conn.execute(sectors_query).fetchall()]
     
+    # Get available pre-calculated scanners from database
+    scanners_query = '''
+        SELECT DISTINCT scanner_name 
+        FROM scanner_data.scanner_results 
+        ORDER BY scanner_name
+    '''
+    available_scanners = [row[0] for row in conn.execute(scanners_query).fetchall()]
+    
     conn.close()
 
     # Combine all patterns
@@ -359,6 +415,7 @@ def index():
         stocks=stocks,
         pattern=pattern,
         available_sectors=available_sectors,
+        available_scanners=available_scanners,
         selected_sector=sector_filter,
         selected_market_cap=min_market_cap,
         selected_min_strength=min_strength
