@@ -147,6 +147,16 @@
                         {% elif stocks[stock][pattern + '_volume_ratio'] < 0.8 %}
                             <span style="color: red;"> ↓ Below Avg</span>
                         {% endif %}
+                        <br><br>
+                        {% if stocks[stock].get(pattern + '_entry_price') %}
+                        <strong>Entry Price:</strong> ${{ '%.2f'|format(stocks[stock][pattern + '_entry_price']) }}<br>
+                        {% endif %}
+                        {% if stocks[stock].get(pattern + '_picked_count') %}
+                        <strong>Confluence:</strong> Picked by {{ stocks[stock][pattern + '_picked_count'] }} scanner(s)<br>
+                        {% endif %}
+                        {% if stocks[stock].get(pattern + '_setup_stage') %}
+                        <strong>Setup Stage:</strong> {{ stocks[stock][pattern + '_setup_stage'] }}<br>
+                        {% endif %}
                         
                         {% if stocks[stock][pattern + '_earnings_date'] and stocks[stock][pattern + '_earnings_days'] and stocks[stock][pattern + '_earnings_days'] > 0 %}
                         <br><br>

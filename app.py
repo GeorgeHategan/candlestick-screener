@@ -291,35 +291,64 @@ def index():
     if pattern:
         # Read pre-calculated scanner results from database
         # Try new schema first
-        scanner_query_new = '''
-            SELECT symbol, signal, strength, quality
+                scanner_query_new = '''
+                        SELECT symbol, signal, strength, quality
+                        FROM scanner_data.scanner_results
+                        WHERE scanner_name = ?
+                            AND scan_date = (
+                                SELECT MAX(scan_date) FROM scanner_data.scanner_results
+                                WHERE scanner_name = ?
+                            )
+                '''
+
+                # Fallback to old schema if new one doesn't work (MotherDuck current)
+                scanner_query_old = '''
+                        SELECT symbol,
+                                     signal_type,
+                                     signal_strength,
+                                     COALESCE(setup_stage, 'N/A') as quality_placeholder,
+                                     entry_price,
+                                     picked_by_scanners,
+                                     setup_stage
             FROM scanner_data.scanner_results
             WHERE scanner_name = ?
-            AND scan_date = (SELECT MAX(scan_date) FROM scanner_data.scanner_results)
+              AND scan_timestamp = (
+                SELECT MAX(scan_timestamp) FROM scanner_data.scanner_results
+                WHERE scanner_name = ?
+              )
         '''
-        
-        # Fallback to old schema if new one doesn't work
-        scanner_query_old = '''
-            SELECT symbol, signal_type, signal_strength, 'N/A'
-            FROM scanner_data.scanner_results
-            WHERE scanner_name = ?
-            AND scan_timestamp = (SELECT MAX(scan_timestamp) FROM scanner_data.scanner_results)
-        '''
-        
+
         scanner_dict = {}
+        # Try new schema first (local newer version) with basic fields
         try:
-            scanner_results = conn.execute(scanner_query_new, [pattern]).fetchall()
-            scanner_dict = {row[0]: {'signal': row[1], 'strength': row[2], 'quality': row[3]} 
-                           for row in scanner_results}
+            scanner_results = conn.execute(scanner_query_new, [pattern, pattern]).fetchall()
+            scanner_dict = {
+                row[0]: {
+                    'signal': row[1],
+                    'strength': row[2],
+                    'quality': row[3],
+                    'entry_price': None,
+                    'picked_by_scanners': None,
+                    'setup_stage': None
+                } for row in scanner_results
+            }
             print(f'Using new schema: found {len(scanner_dict)} results')
         except Exception as e:
             print(f'New schema failed: {e}')
+            # Fallback to old schema (MotherDuck) with extended fields
             try:
-                # Try old schema
-                scanner_results = conn.execute(scanner_query_old, [pattern]).fetchall()
-                scanner_dict = {row[0]: {'signal': row[1], 'strength': row[2], 'quality': row[3]} 
-                               for row in scanner_results}
-                print(f'Using old schema: found {len(scanner_dict)} results')
+                scanner_results = conn.execute(scanner_query_old, [pattern, pattern]).fetchall()
+                scanner_dict = {
+                    row[0]: {
+                        'signal': row[1],
+                        'strength': row[2],
+                        'quality': row[3],  # placeholder (we don't really have quality in old schema)
+                        'entry_price': row[4],
+                        'picked_by_scanners': row[5],
+                        'setup_stage': row[6]
+                    } for row in scanner_results
+                }
+                print(f'Using old schema (extended fields): found {len(scanner_dict)} results')
             except Exception as e2:
                 print(f'Scanner results table not accessible: {e2}')
                 scanner_dict = {}
@@ -331,6 +360,9 @@ def index():
                 result = scanner_result['signal']
                 strength = scanner_result['strength']
                 quality = scanner_result['quality']
+                entry_price = scanner_result.get('entry_price')
+                picked_by_scanners = scanner_result.get('picked_by_scanners')
+                setup_stage = scanner_result.get('setup_stage')
                 
                 # Apply minimum strength filter
                 min_strength_value = float(min_strength) if min_strength else 0
@@ -357,6 +389,12 @@ def index():
                             stocks[symbol][f'{pattern}_volume'] = latest_volume
                             stocks[symbol][f'{pattern}_avg_volume'] = avg_volume_20
                             stocks[symbol][f'{pattern}_volume_ratio'] = round(volume_ratio, 2)
+                            if entry_price is not None:
+                                stocks[symbol][f'{pattern}_entry_price'] = entry_price
+                            if picked_by_scanners is not None:
+                                stocks[symbol][f'{pattern}_picked_count'] = picked_by_scanners
+                            if setup_stage:
+                                stocks[symbol][f'{pattern}_setup_stage'] = setup_stage
                             
                             # Get earnings date
                             earnings_info = get_earnings_date(symbol)
