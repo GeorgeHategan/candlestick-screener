@@ -176,6 +176,96 @@ def snapshot():
         "code": "success"
     }
 
+@app.route('/stats')
+def stats():
+    """Display database statistics landing page."""
+    conn = duckdb.connect(DUCKDB_PATH, read_only=True)
+    
+    stats_data = {}
+    
+    try:
+        # Total number of scanner results
+        total_results = conn.execute("""
+            SELECT COUNT(*) FROM scanner_data.scanner_results
+        """).fetchone()[0]
+        stats_data['total_results'] = total_results
+        
+        # Number of unique assets scanned
+        unique_assets = conn.execute("""
+            SELECT COUNT(DISTINCT symbol) FROM scanner_data.scanner_results
+        """).fetchone()[0]
+        stats_data['unique_assets'] = unique_assets
+        
+        # Number of scanners
+        num_scanners = conn.execute("""
+            SELECT COUNT(DISTINCT scanner_name) FROM scanner_data.scanner_results
+        """).fetchone()[0]
+        stats_data['num_scanners'] = num_scanners
+        
+        # Last updated date
+        last_updated = conn.execute("""
+            SELECT MAX(scan_date) FROM scanner_data.scanner_results
+        """).fetchone()[0]
+        stats_data['last_updated'] = str(last_updated)[:10] if last_updated else 'N/A'
+        
+        # Results per scanner
+        scanner_breakdown = conn.execute("""
+            SELECT scanner_name, COUNT(*) as count
+            FROM scanner_data.scanner_results
+            GROUP BY scanner_name
+            ORDER BY count DESC
+        """).fetchall()
+        stats_data['scanner_breakdown'] = [(row[0], row[1]) for row in scanner_breakdown]
+        
+        # Results per date
+        date_breakdown = conn.execute("""
+            SELECT DATE(scan_date) as date, COUNT(*) as count
+            FROM scanner_data.scanner_results
+            WHERE scan_date IS NOT NULL
+            GROUP BY DATE(scan_date)
+            ORDER BY date DESC
+            LIMIT 10
+        """).fetchall()
+        stats_data['date_breakdown'] = [(str(row[0]), row[1]) for row in date_breakdown]
+        
+        # Top picked assets (by multiple scanners)
+        top_picks = conn.execute("""
+            SELECT symbol, COUNT(DISTINCT scanner_name) as scanner_count
+            FROM scanner_data.scanner_results
+            GROUP BY symbol
+            HAVING COUNT(DISTINCT scanner_name) > 1
+            ORDER BY scanner_count DESC
+            LIMIT 20
+        """).fetchall()
+        stats_data['top_picks'] = [(row[0], row[1]) for row in top_picks]
+        
+        # Signal strength distribution
+        strength_dist = conn.execute("""
+            SELECT 
+                CASE 
+                    WHEN signal_strength >= 90 THEN '90-100'
+                    WHEN signal_strength >= 80 THEN '80-89'
+                    WHEN signal_strength >= 70 THEN '70-79'
+                    WHEN signal_strength >= 60 THEN '60-69'
+                    ELSE '<60'
+                END as strength_range,
+                COUNT(*) as count
+            FROM scanner_data.scanner_results
+            WHERE signal_strength IS NOT NULL
+            GROUP BY strength_range
+            ORDER BY strength_range DESC
+        """).fetchall()
+        stats_data['strength_distribution'] = [(row[0], row[1]) for row in strength_dist]
+        
+    except Exception as e:
+        print(f"Error getting stats: {e}")
+        stats_data['error'] = str(e)
+    
+    conn.close()
+    
+    return render_template('stats.html', stats=stats_data)
+
+
 @app.route('/')
 def index():
     pattern = request.args.get('pattern', False)
