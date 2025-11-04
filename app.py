@@ -40,6 +40,7 @@ ALPHA_VANTAGE_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '75IGYUZ3C7AC2PB
 def ensure_scanner_results_table():
     """Ensure scanner_results table exists with correct schema."""
     try:
+        # Try to connect with write access
         conn = duckdb.connect(DUCKDB_PATH, read_only=False)
         
         # Check if table exists with correct schema
@@ -53,32 +54,35 @@ def ensure_scanner_results_table():
             expected = ['symbol', 'scanner_name', 'signal',
                         'strength', 'quality', 'scan_date']
             if ('signal_type' in column_names or
-                'signal_strength' in column_names or
-                    column_names != expected):
-                print("Fixing scanner_results table schema...")
-                conn.execute(
-                    "DROP TABLE IF EXISTS scanner_data.scanner_results"
-                )
-                raise Exception("Table dropped, will recreate")
+                'signal_strength' in column_names):
+                print("WARNING: Old schema detected. App will adapt.")
+                print("To fix: manually drop and recreate table.")
+            elif column_names != expected:
+                print(f"WARNING: Schema mismatch: {column_names}")
+                print("App will try to adapt to existing schema.")
                 
-        except Exception:
-            # Create table with correct schema
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS scanner_data.scanner_results (
-                    symbol VARCHAR,
-                    scanner_name VARCHAR,
-                    signal VARCHAR,
-                    strength DOUBLE,
-                    quality VARCHAR,
-                    scan_date DATE,
-                    PRIMARY KEY (symbol, scanner_name, scan_date)
-                )
-            """)
-            print("Created scanner_results table with correct schema")
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                # Create table with correct schema
+                try:
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS scanner_data.scanner_results (
+                            symbol VARCHAR,
+                            scanner_name VARCHAR,
+                            signal VARCHAR,
+                            strength DOUBLE,
+                            quality VARCHAR,
+                            scan_date DATE,
+                            PRIMARY KEY (symbol, scanner_name, scan_date)
+                        )
+                    """)
+                    print("Created scanner_results table")
+                except Exception as create_err:
+                    print(f"Cannot create table (read-only?): {create_err}")
         
         conn.close()
     except Exception as e:
-        print(f"Schema check error: {e}")
+        print(f"Schema check skipped (read-only): {e}")
 
 
 # Ensure table exists on startup
@@ -302,20 +306,39 @@ def index():
 
     if pattern:
         # Read pre-calculated scanner results from database
-        scanner_query = '''
+        # Try new schema first
+        scanner_query_new = '''
             SELECT symbol, signal, strength, quality
             FROM scanner_data.scanner_results
             WHERE scanner_name = ?
             AND scan_date = (SELECT MAX(scan_date) FROM scanner_data.scanner_results)
         '''
         
+        # Fallback to old schema if new one doesn't work
+        scanner_query_old = '''
+            SELECT symbol, signal_type, signal_strength, 'N/A'
+            FROM scanner_data.scanner_results
+            WHERE scanner_name = ?
+            AND scan_timestamp = (SELECT MAX(scan_timestamp) FROM scanner_data.scanner_results)
+        '''
+        
+        scanner_dict = {}
         try:
-            scanner_results = conn.execute(scanner_query, [pattern]).fetchall()
+            scanner_results = conn.execute(scanner_query_new, [pattern]).fetchall()
             scanner_dict = {row[0]: {'signal': row[1], 'strength': row[2], 'quality': row[3]} 
                            for row in scanner_results}
+            print(f'Using new schema: found {len(scanner_dict)} results')
         except Exception as e:
-            print(f'Scanner results table not found: {e}')
-            scanner_dict = {}
+            print(f'New schema failed: {e}')
+            try:
+                # Try old schema
+                scanner_results = conn.execute(scanner_query_old, [pattern]).fetchall()
+                scanner_dict = {row[0]: {'signal': row[1], 'strength': row[2], 'quality': row[3]} 
+                               for row in scanner_results}
+                print(f'Using old schema: found {len(scanner_dict)} results')
+            except Exception as e2:
+                print(f'Scanner results table not accessible: {e2}')
+                scanner_dict = {}
         
         for symbol in list(stocks.keys()):
             # Check if symbol has scanner results
@@ -390,12 +413,24 @@ def index():
     available_sectors = [row[0] for row in conn.execute(sectors_query).fetchall()]
     
     # Get available pre-calculated scanners from database
-    scanners_query = '''
-        SELECT DISTINCT scanner_name 
-        FROM scanner_data.scanner_results 
-        ORDER BY scanner_name
-    '''
-    available_scanners = [row[0] for row in conn.execute(scanners_query).fetchall()]
+    available_scanners = []
+    try:
+        scanners_query = '''
+            SELECT DISTINCT scanner_name 
+            FROM scanner_data.scanner_results 
+            ORDER BY scanner_name
+        '''
+        available_scanners = [row[0] for row in conn.execute(scanners_query).fetchall()]
+    except Exception as e:
+        print(f'Could not get scanner list: {e}')
+        # Fallback: if table doesn't work, list the known scanners
+        available_scanners = [
+            'QULLAMAGGIE_BREAKOUT',
+            'MOMENTUM_BURST_1D', 'MOMENTUM_BURST_3D', 'MOMENTUM_BURST_5D',
+            'SUPERTREND_BULLISH', 'SUPERTREND_FRESH', 'SUPERTREND_RECENT',
+            'EXPLOSIVE_VOLUME_3X', 'EXPLOSIVE_VOLUME_5X', 'EXPLOSIVE_VOLUME_10X',
+            'VOLUME_SURGE_WITH_PRICE'
+        ]
     
     conn.close()
 
