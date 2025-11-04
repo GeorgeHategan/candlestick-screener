@@ -110,6 +110,13 @@
         </tr>
         {% for stock in stocks %}
             {% if stocks[stock][pattern] %}
+            {% if not loop.first %}
+            <tr class="result-separator">
+                <td colspan="5" style="padding:0;">
+                    <div style="height:1px;background:#e0e0e0;margin:32px 0 12px 0;"></div>
+                </td>
+            </tr>
+            {% endif %}
             <tr>
                 <td>
                     <a href="https://www.tradingview.com/chart/?symbol={{ stock }}" 
@@ -207,6 +214,13 @@
                     </div>
                 </td>
             </tr>
+            {% if loop.last %}
+            <tr class="result-separator-end">
+                <td colspan="5" style="padding:0;">
+                    <div style="height:1px;background:#e0e0e0;margin:32px 0 4px 0;"></div>
+                </td>
+            </tr>
+            {% endif %}
             {% endif %}
         {% endfor %}
     </table>
