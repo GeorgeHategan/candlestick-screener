@@ -36,41 +36,8 @@ DUCKDB_PATH = os.environ.get('DUCKDB_PATH', '/Users/george/scannerPOC/breakoutSc
 # Set your Alpha Vantage API key here or use environment variable
 ALPHA_VANTAGE_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '75IGYUZ3C7AC2PBM')
 
-
-def ensure_scanner_results_table():
-    """Ensure scanner_results table exists with correct schema."""
-    try:
-        # Use read-only connection for schema check to avoid conflicts
-        conn = duckdb.connect(DUCKDB_PATH, read_only=True)
-        
-        # Check if table exists with correct schema
-        try:
-            schema = conn.execute(
-                "DESCRIBE scanner_data.scanner_results"
-            ).fetchall()
-            column_names = [col[0] for col in schema]
-            
-            # Check for wrong schema (old table)
-            expected = ['symbol', 'scanner_name', 'signal',
-                        'strength', 'quality', 'scan_date']
-            if ('signal_type' in column_names or
-                'signal_strength' in column_names):
-                print("INFO: Using existing schema with signal_type/signal_strength columns")
-            elif column_names != expected:
-                print(f"INFO: Schema columns: {column_names}")
-                
-        except Exception as e:
-            if "does not exist" in str(e).lower():
-                print("WARNING: scanner_results table not found")
-                print("Run with write access to create it, or use existing table")
-        
-        conn.close()
-    except Exception as e:
-        print(f"Schema check info: {e}")
-
-
-# Ensure table exists on startup
-ensure_scanner_results_table()
+# Skip slow database initialization on startup - connect lazily when needed
+print(f"INFO: Database path configured: {DUCKDB_PATH}")
 
 
 def format_market_cap(market_cap):
