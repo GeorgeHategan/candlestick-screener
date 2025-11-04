@@ -268,7 +268,6 @@ def stats():
 
 @app.route('/')
 def index():
-    pattern = request.args.get('pattern', False)
     min_market_cap = request.args.get('min_market_cap', '')
     sector_filter = request.args.get('sector', '')
     min_strength = request.args.get('min_strength', '')
@@ -277,6 +276,22 @@ def index():
 
     # Connect to DuckDB and get list of symbols
     conn = duckdb.connect(DUCKDB_PATH, read_only=True)
+    
+    # Get default pattern (first scanner) if none selected
+    pattern = request.args.get('pattern', None)
+    if not pattern:
+        try:
+            default_scanner = conn.execute("""
+                SELECT DISTINCT scanner_name
+                FROM scanner_data.scanner_results
+                ORDER BY scanner_name
+                LIMIT 1
+            """).fetchone()
+            pattern = default_scanner[0] if default_scanner else False
+        except:
+            pattern = False
+    else:
+        pattern = pattern if pattern != '' else False
     
     # Build query with filters
     symbols_query = '''
@@ -486,15 +501,47 @@ def index():
         # Fallback: empty list
         available_scanners = []
     
-    # Get scanner names from database for the dropdown
+    # Get scanner names from database for the dropdown with counts
     try:
-        scanner_names = conn.execute("""
-            SELECT DISTINCT scanner_name
-            FROM scanner_data.scanner_results
-            ORDER BY scanner_name
-        """).fetchall()
-        # Create patterns dict with scanner_name as both key and display value
-        all_patterns = {row[0]: row[0].replace('_', ' ').title() for row in scanner_names}
+        # Get scanner counts based on selected date
+        if selected_scan_date:
+            # Use the selected date
+            date_to_use = selected_scan_date
+        else:
+            # Get the latest scan date
+            latest_date_result = conn.execute("""
+                SELECT MAX(DATE(scan_date)) 
+                FROM scanner_data.scanner_results
+            """).fetchone()
+            date_to_use = str(latest_date_result[0]) if latest_date_result and latest_date_result[0] else None
+        
+        if date_to_use:
+            scanner_counts_query = """
+                SELECT scanner_name, COUNT(*) as count
+                FROM scanner_data.scanner_results
+                WHERE DATE(scan_date) = ?
+                GROUP BY scanner_name
+                ORDER BY scanner_name
+            """
+            scanner_counts = conn.execute(scanner_counts_query, [date_to_use]).fetchall()
+        else:
+            # Fallback if no date available
+            scanner_counts_query = """
+                SELECT scanner_name, COUNT(*) as count
+                FROM scanner_data.scanner_results
+                GROUP BY scanner_name
+                ORDER BY scanner_name
+            """
+            scanner_counts = conn.execute(scanner_counts_query).fetchall()
+        
+        # Create patterns dict with scanner_name and count
+        all_patterns = {}
+        for row in scanner_counts:
+            scanner_name = row[0]
+            count = row[1]
+            display_name = f"{scanner_name.replace('_', ' ').title()} ({count})"
+            all_patterns[scanner_name] = display_name
+        
         available_scanners = list(all_patterns.keys())
     except Exception as e:
         print(f"Could not load scanners from DB: {e}")
