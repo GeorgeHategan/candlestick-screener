@@ -253,123 +253,84 @@ def index():
         }
 
     if pattern:
-        # Check if it's a custom chart pattern
-        custom_patterns = {
-            'CUP_AND_HANDLE': detect_cup_and_handle,
-            'ASCENDING_TRIANGLE': detect_ascending_triangle,
-            'DOUBLE_BOTTOM': detect_double_bottom,
-            'BULL_FLAG': detect_bull_flag,
-            'BEAR_FLAG': detect_bear_flag,
-            'QULLAMAGGIE_BREAKOUT': detect_qullamaggie_breakout,
-            'MOMENTUM_BURST_1D': detect_momentum_burst_1d,
-            'MOMENTUM_BURST_3D': detect_momentum_burst_3d,
-            'MOMENTUM_BURST_5D': detect_momentum_burst_5d,
-            'SUPERTREND_BULLISH': detect_supertrend_bullish,
-            'SUPERTREND_FRESH': detect_supertrend_fresh,
-            'SUPERTREND_RECENT': detect_supertrend_recent,
-            'EXPLOSIVE_VOLUME_3X': detect_explosive_volume_3x,
-            'EXPLOSIVE_VOLUME_5X': detect_explosive_volume_5x,
-            'EXPLOSIVE_VOLUME_10X': detect_explosive_volume_10x,
-            'VOLUME_SURGE_WITH_PRICE': detect_volume_surge_with_price
-        }
+        # Read pre-calculated scanner results from database
+        scanner_query = '''
+            SELECT symbol, signal, strength, quality
+            FROM scanner_data.scanner_results
+            WHERE scanner_name = ?
+            AND scan_date = (SELECT MAX(scan_date) FROM scanner_data.scanner_results)
+        '''
+        
+        try:
+            scanner_results = conn.execute(scanner_query, [pattern]).fetchall()
+            scanner_dict = {row[0]: {'signal': row[1], 'strength': row[2], 'quality': row[3]} 
+                           for row in scanner_results}
+        except Exception as e:
+            print(f'Scanner results table not found: {e}')
+            scanner_dict = {}
         
         for symbol in list(stocks.keys()):
-            try:
-                # Get data from DuckDB (last 252 days)
-                query = '''
-                    SELECT date, open, high, low, close, volume,
-                           rsi_14, sma_20, sma_50, sma_200, atr_14, rvol
-                    FROM scanner_data.daily_cache
-                    WHERE symbol = ?
-                    ORDER BY date DESC
-                    LIMIT 252
-                '''
-                df = conn.execute(query, [symbol]).df()
+            # Check if symbol has scanner results
+            if symbol in scanner_dict:
+                scanner_result = scanner_dict[symbol]
+                result = scanner_result['signal']
+                strength = scanner_result['strength']
+                quality = scanner_result['quality']
                 
-                if df.empty:
-                    continue
-                
-                # Sort oldest to newest for pattern detection
-                df = df.sort_values('date')
-                
-                # Skip stocks with outdated data (older than 30 days)
-                latest_date = df['date'].iloc[-1]
-                days_old = (pandas.Timestamp.now() - latest_date).days
-                if days_old > 30:
-                    continue
-                
-                # Rename columns to match TA-Lib expectations
-                df.rename(columns={
-                    'open': 'Open',
-                    'high': 'High',
-                    'low': 'Low',
-                    'close': 'Close',
-                    'volume': 'Volume'
-                }, inplace=True)
-
-                result = None
-                if pattern in custom_patterns:
-                    # Custom chart pattern
-                    result = custom_patterns[pattern](df)
-                else:
-                    # TA-Lib candlestick pattern
-                    pattern_function = getattr(talib, pattern)
-                    results = pattern_function(
-                        df['Open'], df['High'], df['Low'], df['Close']
-                    )
-                    last = results.tail(1).values[0]
-
-                    if last > 0:
-                        result = 'bullish'
-                    elif last < 0:
-                        result = 'bearish'
-                
-                # Calculate pattern strength
-                if result and result != 'None':
-                    strength = calculate_pattern_strength(df, result, pattern)
-                    quality = get_signal_quality(strength)
-                    
-                    # Calculate volume statistics
-                    latest_volume = df['Volume'].iloc[-1]
-                    avg_volume_20 = df['Volume'].tail(20).mean()
-                    volume_ratio = latest_volume / avg_volume_20 if avg_volume_20 > 0 else 0
-                    
-                    # Apply minimum strength filter
-                    min_strength_value = float(min_strength) if min_strength else 0
-                    if strength >= min_strength_value:
-                        stocks[symbol][pattern] = result
-                        stocks[symbol][f'{pattern}_strength'] = strength
-                        stocks[symbol][f'{pattern}_quality'] = quality
-                        stocks[symbol][f'{pattern}_volume'] = int(latest_volume)
-                        stocks[symbol][f'{pattern}_avg_volume'] = int(avg_volume_20)
-                        stocks[symbol][f'{pattern}_volume_ratio'] = round(volume_ratio, 2)
+                # Apply minimum strength filter
+                min_strength_value = float(min_strength) if min_strength else 0
+                if strength >= min_strength_value:
+                    try:
+                        # Get volume data for display
+                        vol_query = '''
+                            SELECT volume, avg_volume_20
+                            FROM scanner_data.daily_cache
+                            WHERE symbol = ?
+                            ORDER BY date DESC
+                            LIMIT 1
+                        '''
+                        vol_data = conn.execute(vol_query, [symbol]).fetchone()
                         
-                        # Get earnings date
-                        earnings_info = get_earnings_date(symbol)
-                        if earnings_info:
-                            stocks[symbol][f'{pattern}_earnings_date'] = earnings_info['date']
-                            stocks[symbol][f'{pattern}_earnings_days'] = earnings_info['days_until']
+                        if vol_data:
+                            latest_volume = int(vol_data[0])
+                            avg_volume_20 = int(vol_data[1]) if vol_data[1] else latest_volume
+                            volume_ratio = latest_volume / avg_volume_20 if avg_volume_20 > 0 else 0
+                            
+                            stocks[symbol][pattern] = result
+                            stocks[symbol][f'{pattern}_strength'] = strength
+                            stocks[symbol][f'{pattern}_quality'] = quality
+                            stocks[symbol][f'{pattern}_volume'] = latest_volume
+                            stocks[symbol][f'{pattern}_avg_volume'] = avg_volume_20
+                            stocks[symbol][f'{pattern}_volume_ratio'] = round(volume_ratio, 2)
+                            
+                            # Get earnings date
+                            earnings_info = get_earnings_date(symbol)
+                            if earnings_info:
+                                stocks[symbol][f'{pattern}_earnings_date'] = earnings_info['date']
+                                stocks[symbol][f'{pattern}_earnings_days'] = earnings_info['days_until']
+                            else:
+                                stocks[symbol][f'{pattern}_earnings_date'] = None
+                                stocks[symbol][f'{pattern}_earnings_days'] = None
+                            
+                            # Get news sentiment
+                            sentiment_info = get_news_sentiment(symbol)
+                            if sentiment_info:
+                                stocks[symbol][f'{pattern}_sentiment_score'] = sentiment_info['score']
+                                stocks[symbol][f'{pattern}_sentiment_label'] = sentiment_info['label']
+                                stocks[symbol][f'{pattern}_sentiment_articles'] = sentiment_info['article_count']
+                            else:
+                                stocks[symbol][f'{pattern}_sentiment_score'] = None
+                                stocks[symbol][f'{pattern}_sentiment_label'] = None
+                                stocks[symbol][f'{pattern}_sentiment_articles'] = None
                         else:
-                            stocks[symbol][f'{pattern}_earnings_date'] = None
-                            stocks[symbol][f'{pattern}_earnings_days'] = None
-                        
-                        # Get news sentiment
-                        sentiment_info = get_news_sentiment(symbol)
-                        if sentiment_info:
-                            stocks[symbol][f'{pattern}_sentiment_score'] = sentiment_info['score']
-                            stocks[symbol][f'{pattern}_sentiment_label'] = sentiment_info['label']
-                            stocks[symbol][f'{pattern}_sentiment_articles'] = sentiment_info['article_count']
-                        else:
-                            stocks[symbol][f'{pattern}_sentiment_score'] = None
-                            stocks[symbol][f'{pattern}_sentiment_label'] = None
-                            stocks[symbol][f'{pattern}_sentiment_articles'] = None
-                    else:
+                            stocks[symbol][pattern] = None
+                    except Exception as e:
+                        print(f'failed on {symbol}: {e}')
                         stocks[symbol][pattern] = None
                 else:
                     stocks[symbol][pattern] = None
-                    
-            except Exception as e:
-                print(f'failed on {symbol}: {e}')
+            else:
+                stocks[symbol][pattern] = None
     
     # Get available sectors for dropdown
     sectors_query = '''
