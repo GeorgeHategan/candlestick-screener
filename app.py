@@ -446,25 +446,13 @@ def index():
                             if setup_stage:
                                 stocks[symbol][f'{pattern}_setup_stage'] = setup_stage
                             
-                            # Get earnings date
-                            earnings_info = get_earnings_date(symbol)
-                            if earnings_info:
-                                stocks[symbol][f'{pattern}_earnings_date'] = earnings_info['date']
-                                stocks[symbol][f'{pattern}_earnings_days'] = earnings_info['days_until']
-                            else:
-                                stocks[symbol][f'{pattern}_earnings_date'] = None
-                                stocks[symbol][f'{pattern}_earnings_days'] = None
-                            
-                            # Get news sentiment
-                            sentiment_info = get_news_sentiment(symbol)
-                            if sentiment_info:
-                                stocks[symbol][f'{pattern}_sentiment_score'] = sentiment_info['score']
-                                stocks[symbol][f'{pattern}_sentiment_label'] = sentiment_info['label']
-                                stocks[symbol][f'{pattern}_sentiment_articles'] = sentiment_info['article_count']
-                            else:
-                                stocks[symbol][f'{pattern}_sentiment_score'] = None
-                                stocks[symbol][f'{pattern}_sentiment_label'] = None
-                                stocks[symbol][f'{pattern}_sentiment_articles'] = None
+                            # Skip external API calls - too slow for Render
+                            # TODO: Pre-calculate these and store in DB
+                            stocks[symbol][f'{pattern}_earnings_date'] = None
+                            stocks[symbol][f'{pattern}_earnings_days'] = None
+                            stocks[symbol][f'{pattern}_sentiment_score'] = None
+                            stocks[symbol][f'{pattern}_sentiment_label'] = None
+                            stocks[symbol][f'{pattern}_sentiment_articles'] = None
                         else:
                             stocks[symbol][pattern] = None
                     except Exception as e:
