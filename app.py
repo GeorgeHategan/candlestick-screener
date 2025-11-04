@@ -215,6 +215,7 @@ def index():
     min_market_cap = request.args.get('min_market_cap', '')
     sector_filter = request.args.get('sector', '')
     min_strength = request.args.get('min_strength', '')
+    selected_scan_date = request.args.get('scan_date', '')
     stocks = {}
 
     # Connect to DuckDB and get list of symbols
@@ -289,69 +290,59 @@ def index():
         }
 
     if pattern:
+        # Use pattern name directly as scanner name
+        print(f"Loading scanner results for: {pattern}")
+        
         # Read pre-calculated scanner results from database
-        # Try new schema first
-                scanner_query_new = '''
-                        SELECT symbol, signal, strength, quality
-                        FROM scanner_data.scanner_results
-                        WHERE scanner_name = ?
-                            AND scan_date = (
-                                SELECT MAX(scan_date) FROM scanner_data.scanner_results
-                                WHERE scanner_name = ?
-                            )
-                '''
-
-                # Fallback to old schema if new one doesn't work (MotherDuck current)
-                scanner_query_old = '''
-                        SELECT symbol,
-                                     signal_type,
-                                     signal_strength,
-                                     COALESCE(setup_stage, 'N/A') as quality_placeholder,
-                                     entry_price,
-                                     picked_by_scanners,
-                                     setup_stage
-            FROM scanner_data.scanner_results
-            WHERE scanner_name = ?
-              AND scan_timestamp = (
-                SELECT MAX(scan_timestamp) FROM scanner_data.scanner_results
+        # Build query with optional date filter
+        if selected_scan_date:
+            scanner_query = '''
+                SELECT symbol,
+                       signal_type,
+                       COALESCE(signal_strength, 75) as signal_strength,
+                       COALESCE(setup_stage, 'N/A') as quality_placeholder,
+                       entry_price,
+                       picked_by_scanners,
+                       setup_stage,
+                       scan_date
+                FROM scanner_data.scanner_results
+                WHERE scanner_name = ? AND DATE(scan_date) = ?
+            '''
+            query_params = [pattern, selected_scan_date]
+        else:
+            scanner_query = '''
+                SELECT symbol,
+                       signal_type,
+                       COALESCE(signal_strength, 75) as signal_strength,
+                       COALESCE(setup_stage, 'N/A') as quality_placeholder,
+                       entry_price,
+                       picked_by_scanners,
+                       setup_stage,
+                       scan_date
+                FROM scanner_data.scanner_results
                 WHERE scanner_name = ?
-              )
-        '''
+            '''
+            query_params = [pattern]
 
         scanner_dict = {}
-        # Try new schema first (local newer version) with basic fields
+        # Simple query - just get all results
         try:
-            scanner_results = conn.execute(scanner_query_new, [pattern, pattern]).fetchall()
+            scanner_results = conn.execute(scanner_query, query_params).fetchall()
             scanner_dict = {
                 row[0]: {
                     'signal': row[1],
                     'strength': row[2],
                     'quality': row[3],
-                    'entry_price': None,
-                    'picked_by_scanners': None,
-                    'setup_stage': None
+                    'entry_price': row[4],
+                    'picked_by_scanners': row[5],
+                    'setup_stage': row[6],
+                    'scan_date': str(row[7])[:10] if row[7] else ''
                 } for row in scanner_results
             }
-            print(f'Using new schema: found {len(scanner_dict)} results')
+            print(f'Found {len(scanner_dict)} results for {pattern}')
         except Exception as e:
-            print(f'New schema failed: {e}')
-            # Fallback to old schema (MotherDuck) with extended fields
-            try:
-                scanner_results = conn.execute(scanner_query_old, [pattern, pattern]).fetchall()
-                scanner_dict = {
-                    row[0]: {
-                        'signal': row[1],
-                        'strength': row[2],
-                        'quality': row[3],  # placeholder (we don't really have quality in old schema)
-                        'entry_price': row[4],
-                        'picked_by_scanners': row[5],
-                        'setup_stage': row[6]
-                    } for row in scanner_results
-                }
-                print(f'Using old schema (extended fields): found {len(scanner_dict)} results')
-            except Exception as e2:
-                print(f'Scanner results table not accessible: {e2}')
-                scanner_dict = {}
+            print(f'Scanner query failed: {e}')
+            scanner_dict = {}
         
         for symbol in list(stocks.keys()):
             # Check if symbol has scanner results
@@ -363,6 +354,7 @@ def index():
                 entry_price = scanner_result.get('entry_price')
                 picked_by_scanners = scanner_result.get('picked_by_scanners')
                 setup_stage = scanner_result.get('setup_stage')
+                scan_date = scanner_result.get('scan_date', '')
                 
                 # Apply minimum strength filter
                 min_strength_value = float(min_strength) if min_strength else 0
@@ -386,6 +378,7 @@ def index():
                             stocks[symbol][pattern] = result
                             stocks[symbol][f'{pattern}_strength'] = strength
                             stocks[symbol][f'{pattern}_quality'] = quality
+                            stocks[symbol][f'{pattern}_scan_date'] = scan_date
                             stocks[symbol][f'{pattern}_volume'] = latest_volume
                             stocks[symbol][f'{pattern}_avg_volume'] = avg_volume_20
                             stocks[symbol][f'{pattern}_volume_ratio'] = round(volume_ratio, 2)
@@ -445,26 +438,39 @@ def index():
         available_scanners = [row[0] for row in conn.execute(scanners_query).fetchall()]
     except Exception as e:
         print(f'Could not get scanner list: {e}')
-        # Fallback: if table doesn't work, list the known scanners
-        available_scanners = [
-            'QULLAMAGGIE_BREAKOUT',
-            'MOMENTUM_BURST_1D', 'MOMENTUM_BURST_3D', 'MOMENTUM_BURST_5D',
-            'SUPERTREND_BULLISH', 'SUPERTREND_FRESH', 'SUPERTREND_RECENT',
-            'EXPLOSIVE_VOLUME_3X', 'EXPLOSIVE_VOLUME_5X', 'EXPLOSIVE_VOLUME_10X',
-            'VOLUME_SURGE_WITH_PRICE'
-        ]
+        # Fallback: empty list
+        available_scanners = []
+    
+    # Get scanner names from database for the dropdown
+    try:
+        scanner_names = conn.execute("""
+            SELECT DISTINCT scanner_name
+            FROM scanner_data.scanner_results
+            ORDER BY scanner_name
+        """).fetchall()
+        # Create patterns dict with scanner_name as both key and display value
+        all_patterns = {row[0]: row[0].replace('_', ' ').title() for row in scanner_names}
+        available_scanners = list(all_patterns.keys())
+    except Exception as e:
+        print(f"Could not load scanners from DB: {e}")
+        all_patterns = {}
+        available_scanners = []
+    
+    # Get available scan dates with setup counts
+    available_scan_dates = []
+    try:
+        dates = conn.execute("""
+            SELECT DATE(scan_date) as date, COUNT(*) as count
+            FROM scanner_data.scanner_results
+            WHERE scan_date IS NOT NULL
+            GROUP BY DATE(scan_date)
+            ORDER BY date DESC
+        """).fetchall()
+        available_scan_dates = [(str(row[0]), row[1]) for row in dates]
+    except Exception as e:
+        print(f"Could not load scan dates: {e}")
     
     conn.close()
-
-    # Combine all patterns
-    all_patterns = {
-        **candlestick_patterns, 
-        **custom_chart_patterns,
-        **qullamaggie_pattern,
-        **momentum_burst_patterns,
-        **supertrend_patterns,
-        **explosive_volume_patterns
-    }
     
     return render_template(
         'index.html',
@@ -473,6 +479,8 @@ def index():
         pattern=pattern,
         available_sectors=available_sectors,
         available_scanners=available_scanners,
+        available_scan_dates=available_scan_dates,
+        selected_scan_date=selected_scan_date,
         selected_sector=sector_filter,
         selected_market_cap=min_market_cap,
         selected_min_strength=min_strength
@@ -480,4 +488,6 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 8000))
+    debug = os.environ.get('DEBUG', 'True') == 'True'
+    app.run(debug=debug, host='0.0.0.0', port=port)
