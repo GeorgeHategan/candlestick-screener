@@ -424,7 +424,71 @@ def index():
             print(f'Scanner query failed: {e}')
             scanner_dict = {}
         
-        for symbol in list(stocks.keys()):
+        # Optimization: Fetch ALL volume data in one query instead of N queries
+        symbols_list = list(stocks.keys())
+        volume_data_dict = {}
+        
+        if symbols_list:
+            try:
+                # Build a query with IN clause to get all volumes at once
+                placeholders = ','.join(['?' for _ in symbols_list])
+                bulk_vol_query = f'''
+                    SELECT dc.symbol, dc.volume, dc.avg_volume_20
+                    FROM scanner_data.daily_cache dc
+                    INNER JOIN (
+                        SELECT symbol, MAX(date) as max_date
+                        FROM scanner_data.daily_cache
+                        WHERE symbol IN ({placeholders})
+                        GROUP BY symbol
+                    ) latest ON dc.symbol = latest.symbol AND dc.date = latest.max_date
+                '''
+                vol_results = conn.execute(bulk_vol_query, symbols_list).fetchall()
+                volume_data_dict = {
+                    row[0]: {
+                        'volume': int(row[1]),
+                        'avg_volume_20': int(row[2]) if row[2] else int(row[1])
+                    } for row in vol_results
+                }
+                print(f'Loaded volume data for {len(volume_data_dict)} symbols in single query')
+            except Exception as e:
+                print(f'Bulk volume query failed: {e}')
+                volume_data_dict = {}
+        
+        # Fetch all scanner confirmations for each symbol
+        confirmations_dict = {}
+        if symbols_list:
+            try:
+                placeholders = ','.join(['?' for _ in symbols_list])
+                confirmations_query = f'''
+                    SELECT symbol, scanner_name, scan_date, signal_strength
+                    FROM scanner_data.scanner_results
+                    WHERE symbol IN ({placeholders})
+                    AND scanner_name != ?
+                    ORDER BY symbol, scan_date DESC, scanner_name
+                '''
+                params = symbols_list + [pattern]
+                conf_results = conn.execute(confirmations_query, params).fetchall()
+                
+                for row in conf_results:
+                    sym = row[0]
+                    scanner = row[1]
+                    scan_dt = str(row[2])[:10] if row[2] else ''
+                    strength = row[3]
+                    
+                    if sym not in confirmations_dict:
+                        confirmations_dict[sym] = []
+                    confirmations_dict[sym].append({
+                        'scanner': scanner,
+                        'date': scan_dt,
+                        'strength': strength
+                    })
+                
+                print(f'Loaded scanner confirmations for {len(confirmations_dict)} symbols')
+            except Exception as e:
+                print(f'Confirmations query failed: {e}')
+                confirmations_dict = {}
+        
+        for symbol in symbols_list:
             # Check if symbol has scanner results
             if symbol in scanner_dict:
                 scanner_result = scanner_dict[symbol]
@@ -440,19 +504,11 @@ def index():
                 min_strength_value = float(min_strength) if min_strength else 0
                 if strength >= min_strength_value:
                     try:
-                        # Get volume data for display
-                        vol_query = '''
-                            SELECT volume, avg_volume_20
-                            FROM scanner_data.daily_cache
-                            WHERE symbol = ?
-                            ORDER BY date DESC
-                            LIMIT 1
-                        '''
-                        vol_data = conn.execute(vol_query, [symbol]).fetchone()
-                        
-                        if vol_data:
-                            latest_volume = int(vol_data[0])
-                            avg_volume_20 = int(vol_data[1]) if vol_data[1] else latest_volume
+                        # Get pre-fetched volume data
+                        if symbol in volume_data_dict:
+                            vol_data = volume_data_dict[symbol]
+                            latest_volume = vol_data['volume']
+                            avg_volume_20 = vol_data['avg_volume_20']
                             volume_ratio = latest_volume / avg_volume_20 if avg_volume_20 > 0 else 0
                             
                             stocks[symbol][pattern] = result
@@ -468,6 +524,12 @@ def index():
                                 stocks[symbol][f'{pattern}_picked_count'] = picked_by_scanners
                             if setup_stage:
                                 stocks[symbol][f'{pattern}_setup_stage'] = setup_stage
+                            
+                            # Add scanner confirmations
+                            if symbol in confirmations_dict:
+                                stocks[symbol][f'{pattern}_confirmations'] = confirmations_dict[symbol]
+                            else:
+                                stocks[symbol][f'{pattern}_confirmations'] = []
                             
                             # Skip external API calls - too slow for Render
                             # TODO: Pre-calculate these and store in DB
