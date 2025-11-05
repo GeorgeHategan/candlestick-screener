@@ -287,18 +287,19 @@ def index():
     # Connect to DuckDB and get list of symbols
     conn = duckdb.connect(DUCKDB_PATH, read_only=True)
     
-    # Get default pattern (first scanner) if none selected
+    # Get default pattern (scanner with lowest count) if none selected
     pattern = request.args.get('pattern', None)
     if not pattern:
         try:
             default_scanner = conn.execute("""
-                SELECT DISTINCT scanner_name
+                SELECT scanner_name, COUNT(*) as count
                 FROM scanner_data.scanner_results
-                ORDER BY scanner_name
+                GROUP BY scanner_name
+                ORDER BY count ASC, scanner_name
                 LIMIT 1
             """).fetchone()
             pattern = default_scanner[0] if default_scanner else False
-            print(f"INFO: Set default scanner to: {pattern}")
+            print(f"INFO: Set default scanner to: {pattern} ({default_scanner[1] if default_scanner else 0} setups)")
         except Exception as e:
             print(f"ERROR: Could not get default scanner: {e}")
             pattern = False
