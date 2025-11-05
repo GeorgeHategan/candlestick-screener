@@ -229,6 +229,28 @@
                         <strong>Setup Stage:</strong> {{ stocks[stock][pattern + '_setup_stage'] }}<br>
                         {% endif %}
                         
+                        {% if stocks[stock][pattern + '_earnings_date'] and stocks[stock][pattern + '_earnings_days'] and stocks[stock][pattern + '_earnings_days'] > 0 %}
+                        <br>
+                        <div style="
+                            {% if stocks[stock][pattern + '_earnings_days'] <= 7 %}
+                            background-color: #ffebee; border-left: 4px solid #f44336; padding: 8px; margin: 5px 0;
+                            {% elif stocks[stock][pattern + '_earnings_days'] <= 14 %}
+                            background-color: #fff8e1; border-left: 4px solid #ff9800; padding: 8px; margin: 5px 0;
+                            {% else %}
+                            padding: 5px 0;
+                            {% endif %}
+                        ">
+                            <strong style="font-size: 13px;">📊 Next Earnings:</strong> 
+                            <span style="font-weight: bold;">{{ stocks[stock][pattern + '_earnings_date'] }}</span>
+                            ({{ stocks[stock][pattern + '_earnings_days'] }} days)
+                            {% if stocks[stock][pattern + '_earnings_days'] <= 7 %}
+                                <span style="color: #f44336; font-weight: bold; font-size: 13px;"> ⚠️ IMMINENT</span>
+                            {% elif stocks[stock][pattern + '_earnings_days'] <= 14 %}
+                                <span style="color: #ff9800; font-weight: bold;"> ⚡ SOON</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
                         {% if stocks[stock].get(pattern + '_confirmations') and stocks[stock][pattern + '_confirmations']|length > 0 %}
                         <br>
                         <strong>✓ Confirmed by other scanners:</strong><br>
@@ -241,18 +263,6 @@
                             <span style="color: #999;">... and {{ stocks[stock][pattern + '_confirmations']|length - 5 }} more</span>
                         {% endif %}
                         </div>
-                        {% endif %}
-                        
-                        {% if stocks[stock][pattern + '_earnings_date'] and stocks[stock][pattern + '_earnings_days'] and stocks[stock][pattern + '_earnings_days'] > 0 %}
-                        <br><br>
-                        <strong>Next Earnings:</strong><br>
-                        Date: {{ stocks[stock][pattern + '_earnings_date'] }}<br>
-                        <strong>{{ stocks[stock][pattern + '_earnings_days'] }} days away</strong>
-                        {% if stocks[stock][pattern + '_earnings_days'] <= 7 %}
-                            <span style="color: red; font-weight: bold;"> ⚠ SOON!</span>
-                        {% elif stocks[stock][pattern + '_earnings_days'] <= 14 %}
-                            <span style="color: orange; font-weight: bold;"> ⚡ Coming Up</span>
-                        {% endif %}
                         {% endif %}
                         
                         <br><br>

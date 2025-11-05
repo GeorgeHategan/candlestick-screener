@@ -541,10 +541,16 @@ def index():
                             else:
                                 stocks[symbol][f'{pattern}_confirmations'] = []
                             
-                            # Skip external API calls - too slow for Render
-                            # TODO: Pre-calculate these and store in DB
-                            stocks[symbol][f'{pattern}_earnings_date'] = None
-                            stocks[symbol][f'{pattern}_earnings_days'] = None
+                            # Get earnings date
+                            earnings_info = get_earnings_date(symbol)
+                            if earnings_info:
+                                stocks[symbol][f'{pattern}_earnings_date'] = earnings_info[0]
+                                stocks[symbol][f'{pattern}_earnings_days'] = earnings_info[1]
+                            else:
+                                stocks[symbol][f'{pattern}_earnings_date'] = None
+                                stocks[symbol][f'{pattern}_earnings_days'] = None
+                            
+                            # Skip sentiment API calls - too slow
                             stocks[symbol][f'{pattern}_sentiment_score'] = None
                             stocks[symbol][f'{pattern}_sentiment_label'] = None
                             stocks[symbol][f'{pattern}_sentiment_articles'] = None
