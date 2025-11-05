@@ -33,7 +33,13 @@ app = Flask(__name__)
 # Database configuration
 # For local development, use MotherDuck to access production data
 # For production (Render), use environment variable
-DUCKDB_PATH = os.environ.get('DUCKDB_PATH', 'md:scanner_data?motherduck_token=')
+motherduck_token = os.environ.get('motherduck_token', '')
+if motherduck_token:
+    DUCKDB_PATH = os.environ.get('DUCKDB_PATH', f'md:scanner_data?motherduck_token={motherduck_token}')
+else:
+    # Fallback to local DB if no MotherDuck token
+    DUCKDB_PATH = os.environ.get('DUCKDB_PATH', '/Users/george/scannerPOC/breakoutScannersPOCs/scanner_data.duckdb')
+    print("WARNING: No motherduck_token found, using local database (may not have scanner_results)")
 
 # Set your Alpha Vantage API key here or use environment variable
 ALPHA_VANTAGE_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '75IGYUZ3C7AC2PBM')
