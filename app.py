@@ -33,9 +33,10 @@ app = Flask(__name__)
 # Database configuration
 # For local development, use MotherDuck to access production data
 # For production (Render), use environment variable
-motherduck_token = os.environ.get('motherduck_token', '')
+motherduck_token = os.environ.get('motherduck_token') or os.environ.get('MOTHERDUCK_TOKEN', '')
 if motherduck_token:
     DUCKDB_PATH = os.environ.get('DUCKDB_PATH', f'md:scanner_data?motherduck_token={motherduck_token}')
+    print("INFO: Connecting to MotherDuck production database")
 else:
     # Fallback to local DB if no MotherDuck token
     DUCKDB_PATH = os.environ.get('DUCKDB_PATH', '/Users/george/scannerPOC/breakoutScannersPOCs/scanner_data.duckdb')
