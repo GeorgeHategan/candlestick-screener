@@ -544,8 +544,8 @@ def index():
                             # Get earnings date
                             earnings_info = get_earnings_date(symbol)
                             if earnings_info:
-                                stocks[symbol][f'{pattern}_earnings_date'] = earnings_info[0]
-                                stocks[symbol][f'{pattern}_earnings_days'] = earnings_info[1]
+                                stocks[symbol][f'{pattern}_earnings_date'] = earnings_info['date']
+                                stocks[symbol][f'{pattern}_earnings_days'] = earnings_info['days_until']
                             else:
                                 stocks[symbol][f'{pattern}_earnings_date'] = None
                                 stocks[symbol][f'{pattern}_earnings_days'] = None

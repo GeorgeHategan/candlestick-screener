@@ -154,8 +154,14 @@
     </form>
 
     {% if pattern %}
+    {% set result_count = namespace(value=0) %}
+    {% for stock in stocks %}
+        {% if stocks[stock][pattern] %}
+            {% set result_count.value = result_count.value + 1 %}
+        {% endif %}
+    {% endfor %}
     <div style="margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
-        <strong>Results:</strong> {{ stocks.values()|selectattr(pattern)|list|length }} setups found
+        <strong>Results:</strong> {{ result_count.value }} setups found
         {% if selected_scan_date %}
             <span style="margin-left: 20px; color: #666;">Date: {{ selected_scan_date }}</span>
         {% else %}
