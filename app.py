@@ -30,8 +30,10 @@ from datetime import datetime, timedelta, date
 
 app = Flask(__name__)
 
-# Database configuration - use environment variable for cloud deployment
-DUCKDB_PATH = os.environ.get('DUCKDB_PATH', '/Users/george/scannerPOC/breakoutScannersPOCs/scanner_data.duckdb')
+# Database configuration
+# For local development, use MotherDuck to access production data
+# For production (Render), use environment variable
+DUCKDB_PATH = os.environ.get('DUCKDB_PATH', 'md:scanner_data?motherduck_token=')
 
 # Set your Alpha Vantage API key here or use environment variable
 ALPHA_VANTAGE_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '75IGYUZ3C7AC2PBM')
