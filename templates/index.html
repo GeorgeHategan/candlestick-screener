@@ -61,25 +61,6 @@
         function showLoading() {
             document.getElementById('loadingOverlay').classList.add('active');
         }
-        
-        function togglePatternFilter() {
-            const filterValue = document.querySelector('input[name="pattern_filter"]:checked').value;
-            const patternSelect = document.getElementById('patternSelect');
-            const options = patternSelect.querySelectorAll('option');
-            
-            options.forEach(option => {
-                if (option.value === '') {
-                    // Always show the default option
-                    option.style.display = '';
-                } else if (filterValue === 'precalculated') {
-                    // Show only pre-calculated scanners
-                    option.style.display = option.getAttribute('data-is-scanner') === 'true' ? '' : 'none';
-                } else {
-                    // Show all patterns
-                    option.style.display = '';
-                }
-            });
-        }
     </script>
 </head>
 <body>
@@ -98,15 +79,6 @@
         </div>
     </div>
     <form>
-        <div style="margin-bottom: 10px;">
-            <label style="margin-right: 15px;">
-                <input type="radio" name="pattern_filter" value="all" checked onchange="togglePatternFilter()"> Show All Scanners
-            </label>
-            <label>
-                <input type="radio" name="pattern_filter" value="precalculated" onchange="togglePatternFilter()"> Pre-calculated Scanners Only
-            </label>
-        </div>
-
         <select name="pattern" id="patternSelect" onchange="showLoading(); this.form.submit()">
             <option value="">-- Select a Scanner --</option>
             {% for key in candlestick_patterns %}
