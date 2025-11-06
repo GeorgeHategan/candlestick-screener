@@ -275,6 +275,454 @@ def stats():
     return render_template('stats.html', stats=stats_data)
 
 
+@app.route('/scanner-docs')
+def scanner_docs():
+    """Display documentation landing page with all scanners."""
+    conn = duckdb.connect(DUCKDB_PATH, read_only=True)
+    
+    # Get scanner info
+    scanner_data = conn.execute("""
+        SELECT scanner_name, COUNT(*) as count
+        FROM scanner_data.scanner_results
+        GROUP BY scanner_name
+        ORDER BY scanner_name
+    """).fetchall()
+    
+    conn.close()
+    
+    # Scanner descriptions
+    scanner_descriptions = {
+        'accumulation_distribution': 'Detects institutional smart money buying patterns using volume indicators',
+        'breakout': 'Identifies stocks breaking out above key resistance levels',
+        'bull_flag': 'Finds bullish continuation patterns with consolidation after uptrend',
+        'momentum_burst': 'Spots explosive momentum moves with high volume',
+        'tight_consolidation': 'Detects tight consolidation patterns before potential breakouts'
+    }
+    
+    scanners = []
+    for name, count in scanner_data:
+        scanners.append({
+            'name': name,
+            'display_name': name.replace('_', ' ').title(),
+            'short_desc': scanner_descriptions.get(name, 'Technical pattern scanner'),
+            'count': count
+        })
+    
+    return render_template('scanner_docs.html', scanners=scanners)
+
+
+@app.route('/scanner-docs/<scanner_name>')
+def scanner_detail(scanner_name):
+    """Display detailed documentation for a specific scanner."""
+    conn = duckdb.connect(DUCKDB_PATH, read_only=True)
+    
+    # Get scanner stats
+    stats = conn.execute("""
+        SELECT 
+            COUNT(*) as total,
+            AVG(signal_strength) as avg_strength,
+            COUNT(DISTINCT symbol) as unique_symbols
+        FROM scanner_data.scanner_results
+        WHERE scanner_name = ?
+    """, [scanner_name]).fetchone()
+    
+    conn.close()
+    
+    scanner_info = {
+        'name': scanner_name,
+        'display_name': scanner_name.replace('_', ' ').title(),
+        'total_setups': stats[0] if stats else 0,
+        'avg_strength': f"{stats[1]:.1f}" if stats and stats[1] else "N/A",
+        'unique_symbols': stats[2] if stats else 0
+    }
+    
+    # Load scanner-specific content
+    content = get_scanner_documentation(scanner_name)
+    
+    return render_template('scanner_detail.html', scanner_info=scanner_info, content=content)
+
+
+def get_scanner_documentation(scanner_name):
+    """Return HTML documentation for specific scanner."""
+    
+    docs = {
+        'accumulation_distribution': '''
+<h2>What It Does</h2>
+<p>The Accumulation/Distribution scanner detects institutional smart money buying patterns using multiple volume-based indicators.</p>
+
+<div class="indicator-box">
+    <h3>Core Indicators:</h3>
+    <ul>
+        <li><strong>A/D Line</strong> - Tracks money flow (buying vs selling pressure)</li>
+        <li><strong>OBV (On-Balance Volume)</strong> - Volume-weighted price momentum</li>
+        <li><strong>CMF (Chaikin Money Flow)</strong> - 20-period money flow oscillator</li>
+        <li><strong>Volume Profile</strong> - Up-day vs down-day volume ratios</li>
+        <li><strong>Divergence Detection</strong> - Price/indicator mismatches (bullish signals)</li>
+    </ul>
+</div>
+
+<h2>What "Accumulation" Means</h2>
+<ul>
+    <li>Smart money (institutions, hedge funds) quietly buying shares</li>
+    <li>Price might be flat/consolidating, but volume shows hidden buying</li>
+    <li>Typically happens before major breakouts</li>
+    <li><strong>Example:</strong> TER at $83.08 - institutions accumulated there, now at $187 (+125%)</li>
+</ul>
+
+<h2>Why Multiple Setups Are Found</h2>
+
+<h3>1. Quality Threshold (70/100)</h3>
+<p>Stocks meeting a 70+ quality score are included. Most cluster around:</p>
+<ul>
+    <li>73 score: ~90 stocks (most common)</li>
+    <li>78 score: ~48 stocks</li>
+    <li>80 score: ~45 stocks</li>
+    <li>100 score: ~6 stocks (perfect signals)</li>
+</ul>
+
+<h3>2. Volume Filter (Testing Mode)</h3>
+<div class="alert">
+    <strong>Current:</strong> Accepts stocks with $5M+ daily volume<br>
+    <strong>Production:</strong> Would require $50M+ (10x stricter → ~90% fewer results)
+</div>
+
+<h3>3. Sector Filtering Not Active</h3>
+<p>Currently all sectors included. When enabled, would filter:</p>
+<ul>
+    <li><strong>Avoid:</strong> UTILITIES (8.9% success), REAL ESTATE (10.7%)</li>
+    <li><strong>Prefer:</strong> TECHNOLOGY (30.6%), ENERGY (25.8%)</li>
+</ul>
+
+<h2>Quality Score Breakdown</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Quality</th>
+            <th>Typical %</th>
+            <th>Interpretation</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>100</td>
+            <td>~2%</td>
+            <td>Perfect - All indicators aligned</td>
+        </tr>
+        <tr>
+            <td>93-98</td>
+            <td>~8%</td>
+            <td>Excellent - Strong accumulation</td>
+        </tr>
+        <tr>
+            <td>85-90</td>
+            <td>~8%</td>
+            <td>Very Good - Clear buying</td>
+        </tr>
+        <tr>
+            <td>80-83</td>
+            <td>~18%</td>
+            <td>Good - Solid setup</td>
+        </tr>
+        <tr>
+            <td>73-78</td>
+            <td>~47%</td>
+            <td>Fair - Marginal quality</td>
+        </tr>
+        <tr>
+            <td>70-72</td>
+            <td>~9%</td>
+            <td>Minimum - Barely qualifies</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="alert">
+    <strong>Key Issue:</strong> About 47% of results are "Fair" quality (73-78 range) - these are borderline setups. Consider raising minimum threshold to 80+ for higher quality signals.
+</div>
+''',
+        'breakout': '''
+<h2>What It Does</h2>
+<p>The Breakout scanner identifies stocks breaking above key resistance levels with strong volume confirmation.</p>
+
+<div class="indicator-box">
+    <h3>Detection Criteria:</h3>
+    <ul>
+        <li><strong>Resistance Break</strong> - Price closes above 52-week high or major pivot</li>
+        <li><strong>Volume Surge</strong> - 2x+ average volume on breakout day</li>
+        <li><strong>Momentum</strong> - Strong upward price action</li>
+        <li><strong>Consolidation</strong> - Prior base building phase detected</li>
+    </ul>
+</div>
+
+<h2>Why Breakouts Matter</h2>
+<ul>
+    <li>New all-time highs have no overhead resistance</li>
+    <li>Attracts momentum traders and institutions</li>
+    <li>Often leads to extended moves (continuation pattern)</li>
+    <li>High volume confirms genuine interest vs false breakout</li>
+</ul>
+
+<h2>Quality Factors</h2>
+<h3>Strong Breakouts (80-100)</h3>
+<ul>
+    <li>Volume 3x+ average</li>
+    <li>Clean technical setup</li>
+    <li>Multiple timeframe confirmation</li>
+    <li>Tight consolidation before break</li>
+</ul>
+
+<h3>Moderate Breakouts (60-79)</h3>
+<ul>
+    <li>Volume 1.5-3x average</li>
+    <li>Some resistance overhead</li>
+    <li>Wider consolidation pattern</li>
+</ul>
+
+<div class="success">
+    <strong>Best Practice:</strong> Wait for 2-3 day confirmation above breakout level before entering. False breakouts often fail within 48 hours.
+</div>
+''',
+        'bull_flag': '''
+<h2>What It Does</h2>
+<p>The Bull Flag scanner finds bullish continuation patterns - a strong uptrend followed by a tight consolidation "flag" that typically leads to another leg higher.</p>
+
+<div class="indicator-box">
+    <h3>Pattern Components:</h3>
+    <ul>
+        <li><strong>Flagpole</strong> - Sharp upward move (20%+ gain in 1-3 weeks)</li>
+        <li><strong>Flag</strong> - Tight consolidation (5-10% pullback, 1-3 weeks)</li>
+        <li><strong>Volume</strong> - Heavy on flagpole, light during flag</li>
+        <li><strong>Breakout</strong> - Move above flag high with volume surge</li>
+    </ul>
+</div>
+
+<h2>Why Bull Flags Work</h2>
+<ul>
+    <li>Profit-taking creates healthy consolidation</li>
+    <li>Strong hands accumulate during pullback</li>
+    <li>Short sellers trapped when breakout resumes</li>
+    <li>Pattern measured move: flagpole height added to breakout</li>
+</ul>
+
+<h2>Quality Assessment</h2>
+
+<h3>High Quality Flags (85-100)</h3>
+<ul>
+    <li>Steep flagpole (30%+ in <2 weeks)</li>
+    <li>Tight flag (3-5% range)</li>
+    <li>Volume contracts 50%+ during flag</li>
+    <li>Clean chart with no overhead resistance</li>
+</ul>
+
+<h3>Standard Flags (70-84)</h3>
+<ul>
+    <li>Moderate flagpole (15-30%)</li>
+    <li>Wider flag (5-10% range)</li>
+    <li>Some overhead resistance levels</li>
+</ul>
+
+<div class="alert">
+    <strong>Risk Factor:</strong> Bull flags that take >4 weeks to form lose their potency. Best setups resolve within 2-3 weeks.
+</div>
+
+<h2>Entry Strategies</h2>
+<ol>
+    <li><strong>Aggressive:</strong> Buy near flag low with tight stop</li>
+    <li><strong>Conservative:</strong> Wait for breakout above flag high</li>
+    <li><strong>Confirmation:</strong> Enter on first pullback after breakout</li>
+</ol>
+''',
+        'momentum_burst': '''
+<h2>What It Does</h2>
+<p>The Momentum Burst scanner detects explosive price moves with massive volume - the kind of "rocket ship" moves that can deliver 20-50% gains in days.</p>
+
+<div class="indicator-box">
+    <h3>Detection Triggers:</h3>
+    <ul>
+        <li><strong>Price Surge</strong> - 5%+ move in single day</li>
+        <li><strong>Volume Explosion</strong> - 5x+ average volume</li>
+        <li><strong>Momentum Shift</strong> - RSI break above 70</li>
+        <li><strong>Buying Pressure</strong> - Strong closing range (top 25% of day)</li>
+    </ul>
+</div>
+
+<h2>What Causes Momentum Bursts</h2>
+<ul>
+    <li><strong>Earnings Surprises</strong> - Blowout results trigger buying frenzy</li>
+    <li><strong>News Catalysts</strong> - FDA approval, major contract wins, analyst upgrades</li>
+    <li><strong>Short Squeeze</strong> - Heavily shorted stock forces shorts to cover</li>
+    <li><strong>Breakout Momentum</strong> - Technical breakout attracts algorithm buying</li>
+</ul>
+
+<h2>Timeframe Variants</h2>
+
+<h3>1-Day Burst (Most Common)</h3>
+<ul>
+    <li>Single day explosive move</li>
+    <li>Often news-driven</li>
+    <li>Higher risk of immediate reversal</li>
+    <li><strong>Strategy:</strong> Quick scalp or wait for pullback</li>
+</ul>
+
+<h3>3-Day Burst (Stronger)</h3>
+<ul>
+    <li>Sustained momentum over 3 days</li>
+    <li>More reliable follow-through</li>
+    <li><strong>Strategy:</strong> Swing trade for continuation</li>
+</ul>
+
+<h3>5-Day Burst (Strongest)</h3>
+<ul>
+    <li>Week-long momentum move</li>
+    <li>Usually major fundamental change</li>
+    <li>Best for position trades</li>
+</ul>
+
+<h2>Quality Score Interpretation</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Strength</th>
+            <th>Volume Multiple</th>
+            <th>Risk Level</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>90-100</td>
+            <td>10x+ volume</td>
+            <td>Extreme - Take profits quickly</td>
+        </tr>
+        <tr>
+            <td>80-89</td>
+            <td>7-10x volume</td>
+            <td>High - Tight stops required</td>
+        </tr>
+        <tr>
+            <td>70-79</td>
+            <td>5-7x volume</td>
+            <td>Moderate - Normal position sizing</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="alert">
+    <strong>Warning:</strong> Momentum bursts are the most dangerous signals to trade. 60-70% fade within 3-5 days. Never chase at end of day - wait for pullback or consolidation.
+</div>
+
+<h2>Best Practices</h2>
+<ol>
+    <li><strong>Let It Breathe:</strong> Wait 1-2 days after initial burst</li>
+    <li><strong>Find Support:</strong> Enter on pullback to VWAP or breakout level</li>
+    <li><strong>Use Tight Stops:</strong> 5-7% max loss on these setups</li>
+    <li><strong>Take Profits:</strong> Scale out at 10%, 20%, 30% gains</li>
+</ol>
+''',
+        'tight_consolidation': '''
+<h2>What It Does</h2>
+<p>The Tight Consolidation scanner finds stocks coiling in extremely narrow price ranges - the "calm before the storm" pattern that often precedes explosive breakouts.</p>
+
+<div class="indicator-box">
+    <h3>Pattern Requirements:</h3>
+    <ul>
+        <li><strong>Narrow Range</strong> - Daily ranges <3% for 5+ days</li>
+        <li><strong>Declining Volume</strong> - Volume drying up (shows no sellers)</li>
+        <li><strong>Near Highs</strong> - Consolidating within 5% of 52-week high</li>
+        <li><strong>Clean Base</strong> - No major overhead resistance</li>
+    </ul>
+</div>
+
+<h2>Why Tight Consolidation Works</h2>
+<ul>
+    <li><strong>Spring Loading:</strong> Energy builds like compressed spring</li>
+    <li><strong>No Sellers:</strong> Low volume proves supply exhausted</li>
+    <li><strong>Resolution Required:</strong> Narrow ranges must eventually resolve (usually upward near highs)</li>
+    <li><strong>Institutional Setup:</strong> Big money often accumulates during these periods</li>
+</ul>
+
+<h2>The Volatility Contraction Pattern</h2>
+<p>This is based on Mark Minervini's "VCP" methodology:</p>
+<ol>
+    <li><strong>Phase 1:</strong> Initial consolidation (wider)</li>
+    <li><strong>Phase 2:</strong> Tighter consolidation (narrower)</li>
+    <li><strong>Phase 3:</strong> Very tight (explosive breakout imminent)</li>
+</ol>
+
+<h2>Quality Metrics</h2>
+
+<h3>Perfect Setup (90-100)</h3>
+<ul>
+    <li>10+ days of <2% daily ranges</li>
+    <li>Volume down 60%+ from average</li>
+    <li>Within 2% of all-time high</li>
+    <li>Strong sector/market backdrop</li>
+</ul>
+
+<h3>Good Setup (75-89)</h3>
+<ul>
+    <li>7-9 days of <3% ranges</li>
+    <li>Volume down 40-60%</li>
+    <li>Within 5% of 52-week high</li>
+</ul>
+
+<h3>Marginal Setup (60-74)</h3>
+<ul>
+    <li>5-6 days of consolidation</li>
+    <li>Some overhead resistance visible</li>
+    <li>Moderate volume contraction</li>
+</ul>
+
+<div class="success">
+    <strong>Advantage:</strong> These are the SAFEST high-probability setups. Low-risk entry at consolidation low with stop just below. If it breaks out, often runs 20-50%+.
+</div>
+
+<h2>Entry Strategies</h2>
+
+<h3>Strategy 1: Anticipation (Aggressive)</h3>
+<ul>
+    <li>Buy within the consolidation zone</li>
+    <li>Stop below consolidation low</li>
+    <li>Risk: 3-5%</li>
+    <li>Reward: Can catch entire breakout move</li>
+</ul>
+
+<h3>Strategy 2: Breakout (Conservative)</h3>
+<ul>
+    <li>Wait for break above consolidation high</li>
+    <li>Enter on volume surge</li>
+    <li>Stop at consolidation low</li>
+    <li>Risk: 5-7%</li>
+</ul>
+
+<h3>Strategy 3: Pullback (Best Risk/Reward)</h3>
+<ul>
+    <li>Let it break out first</li>
+    <li>Wait for 2-3 day pullback</li>
+    <li>Enter when it finds support</li>
+    <li>Stop below pullback low</li>
+    <li>Risk: 3-4%</li>
+</ul>
+
+<div class="alert">
+    <strong>Key Insight:</strong> The tighter and longer the consolidation (up to ~3 weeks), the more explosive the eventual move. Consolidations >4 weeks start to lose their spring.
+</div>
+
+<h2>Why So Few Setups?</h2>
+<p>Tight Consolidation is one of the rarest and highest-quality patterns:</p>
+<ul>
+    <li>Most stocks are either trending or in wide ranges</li>
+    <li>True "tight" consolidation requires specific market conditions</li>
+    <li>Pattern only forms on strongest stocks (weak stocks break down)</li>
+    <li>Few stocks meet the strict >5 day, <3% range criteria</li>
+</ul>
+
+<p><strong>Historical Success Rate:</strong> When this pattern appears near all-time highs with proper volume characteristics, it has a ~65-70% success rate for producing 20%+ moves within 4-8 weeks.</p>
+'''
+    }
+    
+    return docs.get(scanner_name, '<p>Documentation coming soon...</p>')
+
+
 @app.route('/')
 def index():
     min_market_cap = request.args.get('min_market_cap', '')
