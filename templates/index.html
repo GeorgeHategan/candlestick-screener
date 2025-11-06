@@ -100,7 +100,7 @@
     <form>
         <div style="margin-bottom: 10px;">
             <label style="margin-right: 15px;">
-                <input type="radio" name="pattern_filter" value="all" checked onchange="togglePatternFilter()"> Show All Patterns
+                <input type="radio" name="pattern_filter" value="all" checked onchange="togglePatternFilter()"> Show All Scanners
             </label>
             <label>
                 <input type="radio" name="pattern_filter" value="precalculated" onchange="togglePatternFilter()"> Pre-calculated Scanners Only
@@ -108,7 +108,7 @@
         </div>
 
         <select name="pattern" id="patternSelect" onchange="showLoading(); this.form.submit()">
-            <option value="">-- Select a Pattern --</option>
+            <option value="">-- Select a Scanner --</option>
             {% for key in candlestick_patterns %}
                 <option value="{{ key }}" {% if pattern == key %}selected="selected"{% endif %} data-is-scanner="{% if key in available_scanners %}true{% else %}false{% endif %}">{{ candlestick_patterns[key] }}</option>
             {% endfor %}
