@@ -61,6 +61,19 @@
         function showLoading() {
             document.getElementById('loadingOverlay').classList.add('active');
         }
+        
+        function clearTicker() {
+            document.getElementById('tickerSearch').value = '';
+            showLoading();
+            document.querySelector('form').submit();
+        }
+        
+        function handleTickerInput(event) {
+            if (event.key === 'Enter') {
+                showLoading();
+                document.querySelector('form').submit();
+            }
+        }
     </script>
 </head>
 <body>
@@ -74,11 +87,33 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h1>Technical Scanner</h1>
         <div style="display: flex; gap: 10px;">
-            <a href="/scanner-docs" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">📚 Scanner Docs</a>
-            <a href="/stats" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">📊 View Stats</a>
+            <a href="/scanner-docs" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">� Scanner Docs</a>
+            <a href="/stats" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">� View Stats</a>
         </div>
     </div>
     <form>
+        <div style="display: inline-block; position: relative;">
+            <input 
+                type="text" 
+                name="ticker" 
+                id="tickerSearch" 
+                placeholder="🔍 Search ticker (e.g., AAPL)..." 
+                value="{{ selected_ticker if selected_ticker else '' }}"
+                style="padding: 10px 15px; font-size: 14px; border: 2px solid #ddd; border-radius: 5px; width: 250px; text-transform: uppercase;"
+                list="tickerList"
+                autocomplete="off"
+                onkeypress="handleTickerInput(event)"
+            >
+            <datalist id="tickerList">
+                {% for ticker in available_tickers %}
+                <option value="{{ ticker }}">
+                {% endfor %}
+            </datalist>
+            {% if selected_ticker %}
+            <button type="button" onclick="clearTicker()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: #e74c3c; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; font-size: 12px; font-weight: bold;">✕</button>
+            {% endif %}
+        </div>
+
         <select name="pattern" id="patternSelect" onchange="showLoading(); this.form.submit()">
             <option value="">-- Select a Scanner --</option>
             {% for key in candlestick_patterns %}
