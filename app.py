@@ -1596,7 +1596,13 @@ def index():
                    entry_price,
                    picked_by_scanners,
                    setup_stage,
-                   scan_date
+                   scan_date,
+                   news_sentiment,
+                   news_sentiment_label,
+                   news_relevance,
+                   news_headline,
+                   news_published,
+                   news_url
             FROM scanner_data.scanner_results
             WHERE scanner_name = ?
         '''
@@ -1710,6 +1716,12 @@ def index():
                 picked_by_scanners = scanner_result.get('picked_by_scanners')
                 setup_stage = scanner_result.get('setup_stage')
                 scan_date = scanner_result.get('scan_date', '')
+                news_sentiment = scanner_result.get('news_sentiment')
+                news_sentiment_label = scanner_result.get('news_sentiment_label')
+                news_relevance = scanner_result.get('news_relevance')
+                news_headline = scanner_result.get('news_headline')
+                news_published = scanner_result.get('news_published')
+                news_url = scanner_result.get('news_url')
                 
                 # Apply minimum strength filter
                 min_strength_value = float(min_strength) if min_strength else 0
@@ -1735,6 +1747,20 @@ def index():
                                 stocks[symbol][f'{pattern}_picked_count'] = picked_by_scanners
                             if setup_stage:
                                 stocks[symbol][f'{pattern}_setup_stage'] = setup_stage
+                            
+                            # Add news sentiment data from database
+                            if news_sentiment is not None:
+                                stocks[symbol]['news_sentiment'] = news_sentiment
+                            if news_sentiment_label:
+                                stocks[symbol]['news_sentiment_label'] = news_sentiment_label
+                            if news_relevance is not None:
+                                stocks[symbol]['news_relevance'] = news_relevance
+                            if news_headline:
+                                stocks[symbol]['news_headline'] = news_headline
+                            if news_published:
+                                stocks[symbol]['news_published'] = news_published
+                            if news_url:
+                                stocks[symbol]['news_url'] = news_url
                             
                             # Add scanner confirmations
                             if symbol in confirmations_dict:
