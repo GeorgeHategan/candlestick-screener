@@ -1633,7 +1633,13 @@ def index():
                     'entry_price': row[4],
                     'picked_by_scanners': row[5],
                     'setup_stage': row[6],
-                    'scan_date': str(row[7])[:10] if row[7] else ''
+                    'scan_date': str(row[7])[:10] if row[7] else '',
+                    'news_sentiment': row[8] if len(row) > 8 else None,
+                    'news_sentiment_label': row[9] if len(row) > 9 else None,
+                    'news_relevance': row[10] if len(row) > 10 else None,
+                    'news_headline': row[11] if len(row) > 11 else None,
+                    'news_published': row[12] if len(row) > 12 else None,
+                    'news_url': row[13] if len(row) > 13 else None
                 } for row in scanner_results
             }
             print(f'Found {len(scanner_dict)} results for {pattern}')
